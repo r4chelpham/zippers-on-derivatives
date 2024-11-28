@@ -1,4 +1,3 @@
--- TODO: test the damn code!!!!!!
 module TreeZipper (
     Tree(..),
     Context(..),
@@ -45,7 +44,10 @@ root :: Zipper a -> Zipper a
 root z@(Zipper _ T) = z
 root z@(Zipper _ _) = up z
 
--- TODO: decide whether i want to modify the tree?
+-- modify the value of the node at some position in the zipper
+modify :: a -> a -> Zipper a -> Zipper a
+modify f (Zipper Node x l r c) = Zipper (Node f x l r c)
+
 -- TODO: ask whether it is better to keep the tree you came from traversable when going up?
 
 -- function to make traversing the tree more readable
