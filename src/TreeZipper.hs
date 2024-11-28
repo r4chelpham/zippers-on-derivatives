@@ -45,8 +45,8 @@ root z@(Zipper _ T) = z
 root z@(Zipper _ _) = up z
 
 -- modify the value of the node at some position in the zipper
-modify :: a -> a -> Zipper a -> Zipper a
-modify f (Zipper Node x l r c) = Zipper (Node f x l r c)
+modify :: Zipper a -> (a -> a) -> Zipper a
+modify (Zipper (Node x l r) c) f = Zipper (Node (f x) l r) c
 
 -- TODO: ask whether it is better to keep the tree you came from traversable when going up?
 
