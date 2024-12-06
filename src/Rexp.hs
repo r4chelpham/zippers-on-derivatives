@@ -28,7 +28,7 @@ nullable (RANGE _) = False
 nullable (PLUS r) = nullable r
 nullable (OPTIONAL _) = True
 nullable (NTIMES _ 0) = True
-nullable (NTIMES r n) = nullable r
+nullable (NTIMES r _) = nullable r
 nullable (RECD _ r) = nullable r
 nullable (CFUN _) = False
 
@@ -42,9 +42,9 @@ der (STAR r) c = SEQ (der r c) r
 der (RANGE cs) c = if Set.member c cs then ONE else ZERO
 der (PLUS r) c = SEQ (der r c) (STAR r)
 der (OPTIONAL r) c = der r c
-der (NTIMES r 0) c = ZERO
+der (NTIMES _ 0) _ = ZERO
 der (NTIMES r n) c = SEQ (der r c) (NTIMES r (n-1))
-der (RECD s r) c = der r c
+der (RECD _ r) c = der r c
 der (CFUN f) c
     | f c = ONE
     | otherwise = ZERO
