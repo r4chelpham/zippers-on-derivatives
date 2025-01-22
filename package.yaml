@@ -2,9 +2,9 @@ name:                zippers-on-derivatives
 version:             0.1.0.0
 github:              "githubuser/zippers-on-derivatives"
 license:             BSD-3-Clause
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2024 Author name here"
+author:              "Rachel Pham"
+maintainer:          "rachel.pham@kcl.ac.uk"
+copyright:           "2024 Rachel Pham"
 
 extra-source-files:
 - README.md
@@ -22,6 +22,9 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.7 && < 5
 - containers
+- hspec >= 2.11.10
+- QuickCheck >= 2.14.3
+- hspec-discover
 
 ghc-options:
 - -Wall
