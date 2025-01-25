@@ -67,6 +67,7 @@ test-suite zippers-on-derivatives-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      LexerSpec
       RexpSpec
       ValSpec
       Paths_zippers_on_derivatives

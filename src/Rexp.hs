@@ -1,4 +1,6 @@
 {-# HLINT ignore "Use foldl" #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Rexp where
 
 import qualified Data.Set as Set
@@ -27,6 +29,7 @@ instance Arbitrary Rexp where
                     , SEQ <$> arbitrary <*> arbitrary
                     , STAR <$> arbitrary
                     ]
+
 
 nullable :: Rexp -> Bool
 nullable ZERO = False
@@ -68,3 +71,31 @@ ders r (c:cs) = ders (der r c) cs
 
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
+
+-- helper functions for converting strings to regular expressions
+charsToRexp :: [Char] -> Rexp
+charsToRexp [] = ONE
+charsToRexp [c] = CHAR c
+charsToRexp (c:cs) = SEQ (CHAR c) (charsToRexp cs)
+
+class ToRexp a where
+    toRexp :: a -> Rexp
+
+instance ToRexp [Char] where
+    toRexp = charsToRexp
+
+infixl 5 ~
+infixl 4 +
+-- infixl 6 %
+
+(~) :: ToRexp a => a -> Rexp -> Rexp
+x ~ r = SEQ (toRexp x) r
+
+-- (%) :: ToRexp a => a -> Rexp
+-- x % = STAR (toRexp x)
+
+(+) :: ToRexp a => a -> Rexp -> Rexp
+x + r = ALT (toRexp x) r
+
+(#) :: String -> Rexp -> Rexp
+s # r = RECD s r
