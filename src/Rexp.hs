@@ -1,3 +1,4 @@
+{-# HLINT ignore "Use foldl" #-}
 module Rexp where
 
 import qualified Data.Set as Set
@@ -61,9 +62,9 @@ der (RECD _ r) c = der r c
     -- | f c = ONE
     -- | otherwise = ZERO
 
-ders :: Rexp -> String -> Rexp
+ders :: Rexp -> [Char] -> Rexp
 ders r [] = r
-ders r c:cs = ders (der r c) cs
+ders r (c:cs) = ders (der r c) cs
 
-matcher :: Rexp -> String -> Bool
+matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
