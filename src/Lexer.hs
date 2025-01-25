@@ -11,17 +11,27 @@ mkeps (ALT r1 r2) =
     else Val.Right (mkeps r2)
 mkeps (SEQ r1 r2) = Sequ (mkeps r1) (mkeps r2)
 mkeps (STAR _) = Stars []
+mkeps (OPTIONAL _) = Opt Empty
+mkeps (NTIMES _ 0) = NX []
+mkeps (NTIMES r _) = NX [mkeps r]
+mkeps (PLUS r) = Pls [mkeps r]
 mkeps (RECD s r) = Rec s (mkeps r)
 
 inj :: Rexp -> Char -> Val -> Val
-inj (STAR r) c (Sequ v1 (Stars vs)) = Stars (inj r c v1:vs)
-inj (SEQ r1 _) c (Sequ v1 v2) = Sequ (inj r1 c v1) v2
-inj (SEQ r1 _) c (Val.Left (Sequ v1 v2)) = Sequ (inj r1 c v1) v2
-inj (SEQ r1 _) c (Val.Right v2) = Sequ (mkeps r1) (inj r1 c v2)
-inj (ALT r1 _) c (Val.Left v1) = Val.Left (inj r1 c v1)
-inj (ALT _ r2) c (Val.Right v2) = Val.Right (inj r2 c v2)
-inj (CHAR _) c Empty = Chr c
-inj (RECD s r) c v = Rec s (inj r c v)
+inj r c v =
+    case (r, v) of 
+       (STAR _, Sequ v1 (Stars vs)) -> Stars (inj r c v1:vs)
+       (SEQ r1 _, Sequ v1 v2) -> Sequ (inj r1 c v1) v2
+       (SEQ r1 _, Val.Left (Sequ v1 v2)) -> Sequ (inj r1 c v1) v2
+       (SEQ r1 _, Val.Right v2) -> Sequ (mkeps r1) (inj r1 c v2)
+       (ALT r1 _, Val.Left v1) -> Val.Left (inj r1 c v1)
+       (ALT _ r2, Val.Right v2) -> Val.Right (inj r2 c v2)
+       (CHAR _, Empty) -> Chr c 
+       (RANGE _, Empty) -> Chr c
+       (PLUS r1, Sequ v1 (Stars vs)) -> Pls (inj r1 c v1:vs)
+       (OPTIONAL r1, _) -> Opt (inj r1 c v)
+       (NTIMES r1 _, Sequ v1 (NX vs)) -> NX(inj r1 c v1:vs)
+       (RECD s r1, _) -> Rec s (inj r1 c v)
 
 -- simplification functions
 fId :: Val -> Val

@@ -37,6 +37,26 @@ spec = do
             nullable (STAR ONE) `shouldBe` True
             nullable (STAR ZERO) `shouldBe` True
 
+        it "returns false for all RANGE" $ do
+            property $ \vs -> 
+                not $ nullable (Rexp.RANGE vs)
+
+        it "returns true for all OPTIONAL" $ do
+            property $ \r ->
+                nullable (Rexp.OPTIONAL r)
+
+        it "returns true for all PLUS iff r is nullable" $ do
+            property $ \r ->
+                nullable (Rexp.PLUS r) ==> nullable r
+        
+        it "returns true for all NTIMES iff n is 0" $ do
+            property $ \r ->
+                nullable (Rexp.NTIMES r 0)
+
+        it "returns true for all NTIMES iff n is not 0 and r is nullable" $ do
+            property $ \r n ->
+                n > 0 && nullable (Rexp.NTIMES r n) ==> nullable r 
+
     describe "der" $ do
         it "derives ZERO from ZERO for any character" $ do
             property $ \c -> der ZERO c == ZERO

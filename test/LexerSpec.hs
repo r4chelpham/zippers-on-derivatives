@@ -36,9 +36,36 @@ spec = do
         
         it "returns a Stars for a STAR" $ do
             property $ \r -> 
-                nullable r ==>
+                nullable (STAR r) ==>
                     case Lexer.mkeps (STAR r) of 
                         Val.Stars [] -> True
+                        _ -> False
+
+        it "returns an Opt for an OPTIONAL" $ property $ 
+            \r -> 
+                nullable (OPTIONAL r) ==>
+                    case Lexer.mkeps (OPTIONAL r) of 
+                        Val.Opt Empty -> True
+                        _ -> False
+
+        it "returns a Pls for a PLUS" $ do
+            property $ \r -> 
+                nullable (Rexp.PLUS r) ==>
+                    case Lexer.mkeps (PLUS r) of 
+                        Val.Pls _ -> True
+                        _ -> False
+        
+        it "returns an empty NX for a NTIMES with n == 0" $ do
+            property $ \r-> 
+                case Lexer.mkeps (Rexp.NTIMES r 0) of 
+                    Val.NX [] -> True
+                    _ -> False
+        
+        it "returns a NX for a NTIMES with n > 0" $ do
+            property $ \r n-> 
+                nullable (Rexp.NTIMES r n) ==>
+                    case Lexer.mkeps (Rexp.NTIMES r n) of 
+                        Val.NX _ -> True
                         _ -> False
 
     describe "lexSimp" $ do
