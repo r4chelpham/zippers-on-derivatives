@@ -1,10 +1,10 @@
 import qualified Rexp
-import qualified Lexer
+import qualified EdelmannZipper
 
 main :: IO ()
 main = do
     let c = Rexp.RECD "a" (Rexp.CHAR 'a') in 
-        print (Lexer.lexingSimp c "a")
+        print (EdelmannZipper.matcher c "a")
     
     -- let charTree = Node ("char", CHAR 'c') Nil Nil
     -- print charTree

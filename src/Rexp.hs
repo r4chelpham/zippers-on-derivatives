@@ -16,7 +16,7 @@ data Rexp = ZERO
             | RANGE (Set.Set Char)
             | PLUS Rexp
             | OPTIONAL Rexp
-            | NTIMES Rexp Int deriving (Show, Eq)
+            | NTIMES Rexp Int deriving (Show, Eq, Ord)
 
 -- We define an Arbitrary instance of Rexp for property testing purposes.
 instance Arbitrary Rexp where
