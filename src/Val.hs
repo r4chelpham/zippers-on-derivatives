@@ -48,3 +48,16 @@ env (Opt v) = env v
 env (Pls vs) = vs >>= \x -> env x
 env (NX vs) =  vs >>= \x -> env x
 env (Rec s v) = (s, flatten v) : env v
+
+-- benchmarking functions
+sizeVal :: Val -> Int
+sizeVal Empty = 1
+sizeVal (Chr _) = 1
+sizeVal (Val.Left v) = 1 + sizeVal v
+sizeVal (Val.Right v) = 1 + sizeVal v
+sizeVal (Sequ v1 v2) = 1 + sizeVal v1 + sizeVal v2
+sizeVal (Stars []) = 1
+sizeVal (Stars (v:vs)) = 1 + sizeVal v
+sizeVal (Opt v) = 1 + sizeVal v
+sizeVal (Pls vs) = 1 + length vs
+sizeVal (Rec _ v) = sizeVal v
