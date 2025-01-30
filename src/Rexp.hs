@@ -1,5 +1,7 @@
 {-# HLINT ignore "Use foldl" #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Rexp where
 
@@ -22,13 +24,13 @@ data Rexp = ZERO
 instance Arbitrary Rexp where
   arbitrary = oneof [ return ZERO
                     , return ONE
-                    , CHAR <$> arbitrary
-                    , ALT <$> arbitrary <*> arbitrary
-                    , SEQ <$> arbitrary <*> arbitrary
-                    , STAR <$> arbitrary
-                    , OPTIONAL <$> arbitrary
-                    , PLUS <$> arbitrary
-                    , NTIMES <$> arbitrary <*> choose (0, 100)
+                    , CHAR Prelude.<$> arbitrary
+                    , ALT Prelude.<$> arbitrary Prelude.<*> arbitrary
+                    , SEQ Prelude.<$> arbitrary Prelude.<*> arbitrary
+                    , STAR Prelude.<$> arbitrary
+                    , OPTIONAL Prelude.<$> arbitrary
+                    , PLUS Prelude.<$> arbitrary
+                    , NTIMES Prelude.<$> arbitrary <*> choose (0, 100)
                     ]
 
 
@@ -66,3 +68,26 @@ ders r (c:cs) = ders (der r c) cs
 
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
+
+class ToRexp a where
+  toRexp :: a -> Rexp
+
+instance ToRexp Rexp where
+  toRexp :: Rexp -> Rexp
+  toRexp = id 
+
+instance ToRexp String where
+  toRexp = foldr (SEQ . CHAR) ONE  
+
+infixl 6 <~>
+infixl 5 <|>
+infixl 3 <$>
+
+(<~>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
+a <~> b = SEQ (toRexp a) (toRexp b)
+
+(<|>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
+a <|> b = ALT (toRexp a) (toRexp b)
+
+(<$>) :: String -> Rexp -> Rexp
+s <$> r = RECD s r
