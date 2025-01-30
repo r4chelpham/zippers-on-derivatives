@@ -2,13 +2,15 @@ module RexpZipper where
 
 type Sym = Char
 
-data Exp = CHAR Char
+data Exp = ZERO
+            | ONE
+            | CHAR Char
             | SEQ Sym [Exp]
             | ALT [Exp] deriving (Show)
 
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
-            | AltC Context deriving (Show) --
+            | AltC Context deriving (Show) -- Alternate has one context shared between its children
 data Zipper = Zipper Exp Context deriving (Show)
 
 focus :: Exp -> Zipper
@@ -18,6 +20,10 @@ der ::  Char -> Zipper -> [Zipper]
 der c (Zipper re ctx) = up re ctx
     where
     down :: Context -> Exp -> [Zipper]
+    down _ ZERO = []
+    down ct ONE 
+        | c == '\0' = [Zipper (SEQ c []) ct]
+        | otherwise = []
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
@@ -37,3 +43,4 @@ ders cs zs = foldl (\ z c -> concatMap (der c) z) zs (cs++['\0'])
 
 matcher :: [Char] -> Exp -> Bool
 matcher s r = not $ null $ ders s [focus r]
+
