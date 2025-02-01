@@ -28,7 +28,6 @@ library
       EdelmannZipper
       Lexer
       Rexp
-      RexpZipper
       TreeZipper
       Val
   other-modules:
