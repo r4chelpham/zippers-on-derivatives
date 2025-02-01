@@ -19,20 +19,28 @@ mkeps (PLUS r) = Pls [mkeps r]
 mkeps (RECD s r) = Rec s (mkeps r)
 
 inj :: Rexp -> Char -> Val -> Val
-inj r c v =
-    case (r, v) of
-       (STAR r1, Sequ v1 (Stars vs)) -> Stars (inj r1 c v1:vs)
-       (SEQ r1 _, Sequ v1 v2) -> Sequ (inj r1 c v1) v2
-       (SEQ r1 _, Val.Left (Sequ v1 v2)) -> Sequ (inj r1 c v1) v2
-       (SEQ r1 _, Val.Right v2) -> Sequ (mkeps r1) (inj r1 c v2)
-       (ALT r1 _, Val.Left v1) -> Val.Left (inj r1 c v1)
-       (ALT _ r2, Val.Right v2) -> Val.Right (inj r2 c v2)
-       (CHAR _, Empty) -> Chr c
-       (RANGE _, Empty) -> Chr c
-       (PLUS r1, Sequ v1 (Stars vs)) -> Pls (inj r1 c v1:vs)
-       (OPTIONAL r1, _) -> Opt (inj r1 c v)
-       (NTIMES r1 _, Sequ v1 (NX vs)) -> NX (inj r1 c v1:vs)
-       (RECD s r1, _) -> Rec s (inj r1 c v)
+inj r c v = 
+  case (r, v) of
+    (STAR r1, Sequ v1 (Stars vs)) -> Stars (inj r1 c v1:vs)
+    (SEQ r1 _, Sequ v1 v2) -> Sequ (inj r1 c v1) v2
+    (SEQ r1 _, Val.Left (Sequ v1 v2)) -> Sequ (inj r1 c v1) v2
+    (SEQ r1 r2, Val.Right v2) -> Sequ (mkeps r1) (inj r2 c v2)
+    (ALT r1 _, Val.Left v1) -> Val.Left (inj r1 c v1)
+    (ALT _ r2, Val.Right v2) -> Val.Right (inj r2 c v2)
+    (CHAR _, Empty) -> Chr c
+    (RANGE _, Empty) -> Chr c
+    (PLUS r1, Sequ v1 (Stars vs)) -> Pls (inj r1 c v1:vs)
+    (OPTIONAL r1, _) -> Opt (inj r1 c v)
+    (NTIMES r1 _, Sequ v1 (NX vs)) -> NX (inj r1 c v1:vs)
+    (RECD s r1, _) -> Rec s (inj r1 c v)
+    _ ->
+        error ("Could not resolve the matching of the string and the regular expression:\n" 
+        ++ show r 
+        ++ "\nCharacter: "
+        ++ show c
+        ++ "\nValue: "
+        ++ show v
+        )
 
 -- simplification functions
 fId :: Val -> Val
@@ -102,25 +110,28 @@ lexSimp r (c:cs) =
     inj r c (fSimp $ lexSimp rSimp cs)
 
 lexingSimp :: Rexp -> String -> [(String, String)]
-lexingSimp r s = env $ lexSimp r s
+lexingSimp r s = Val.env $ lexSimp r s
 
 keyword :: Rexp
-keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|> "to" <|> "true" <|> "false" <|> "read" <|> "write" <|> "skip" <|> "break"
+keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|> 
+          "to" <|> "true" <|> "false" <|> "read" <|> "write" <|> 
+          "skip" <|> "break"
 
 op :: Rexp
-op = "+" <|> "-" <|> "*" <|> "%" <|> "/" <|> "==" <|> "!=" <|> ">" <|> "<" <|> "<=" <|> ">=" <|> ":=" <|> "&&" <|> "||"
+op = "+" <|> "-" <|> "*" <|> "%" <|> "/" <|> "==" <|> "!=" <|> ">" <|> 
+     "<" <|> "<=" <|> ">=" <|> ":=" <|> "&&" <|> "||"
 
 lett :: Rexp
-lett = RANGE (Set.fromList (['A' .. 'Z']++['a' .. 'z']))
+lett = RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z'])
 
 sym :: Rexp
 sym = lett <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
 parens :: Rexp
-parens = RANGE (Set.fromList ['(', ')', '{', '}'])
+parens = RANGE $ Set.fromList ['(', ')', '{', '}']
 
 digit :: Rexp
-digit = RANGE (Set.fromList ['1' .. '9'])
+digit = RANGE $ Set.fromList ['0'..'9']
 
 semi :: Rexp
 semi = toRexp ";"
@@ -128,11 +139,11 @@ semi = toRexp ";"
 whitespace :: Rexp
 whitespace = PLUS (" " <|> "\n" <|> "\t" <|> "\r")
 
-id :: Rexp
-id = lett <~> STAR ("_" <|> lett <|> digit)
+identifier :: Rexp
+identifier = lett <~> STAR ("_" <|> lett <|> digit)
 
-num :: Rexp
-num = "0" <|> STAR  (RANGE (Set.fromList ['1' .. '9']) <~> digit)
+numbers :: Rexp
+numbers = "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> STAR digit)
 
 string :: Rexp
 string = "\"" <~> STAR (sym <|> digit <|> parens <|> whitespace <|> "\n") <~> "\""
@@ -141,7 +152,7 @@ eol :: Rexp
 eol = "\n" <|> "\r\n"
 
 comment :: Rexp
-comment = "//" <~> STAR (sym <|> parens <|> digit <|> STAR (toRexp " ")) <~> eol
+comment = "//" <~> STAR (sym <|> parens <|> digit <|> toRexp " ") <~> eol
 
 data Token = T_KEYWORD String
             | T_OP String
@@ -149,7 +160,7 @@ data Token = T_KEYWORD String
             | T_PAREN String
             | T_SEMI
             | T_ID String
-            | T_NUM Integer
+            | T_NUM Integer deriving (Show)
 
 token :: (String, String) -> Token
 token ("k", s) = T_KEYWORD s
@@ -160,15 +171,20 @@ token ("s", _) = T_SEMI
 token ("i", s) = T_ID s
 token ("n", s) = T_NUM (read s :: Integer)
 
-let WHILE_REGS = Rexp.STAR (("k" $ keyword) <|> 
-                        ("o" $ op) <|> 
-                        ("str" $ string) <|>
-                        ("p" $ parens) <|>
-                        ("s" $ semi) <|> 
-                        ("w" $ whitespace) <|> 
-                        ("i" $ id) <|> 
-                        ("n" $ numbers) <|>
-                        ("c" $ comment))
+
+whileRegs :: Rexp
+whileRegs = Rexp.STAR (("k" Rexp.<$> keyword)
+                <|> ("o" Rexp.<$> op)
+                <|> ("str" Rexp.<$> string)
+                <|> ("p" Rexp.<$> parens)
+                <|> ("s" Rexp.<$> semi)
+                <|> ("w" Rexp.<$> whitespace)
+                <|> ("i" Rexp.<$> identifier)
+                <|> ("n" Rexp.<$> numbers)
+                <|> ("c" Rexp.<$> comment))
 
 tokenise :: String -> [Token]
-tokenise s = filter token $ lexingSimp WHILE_REGS s
+tokenise s = map token $ filter isNotWhitespace $ lexingSimp whileRegs s
+  where isNotWhitespace ("w", _) = False
+        isNotWhitespace ("c", _) = False
+        isNotWhitespace _ = True
