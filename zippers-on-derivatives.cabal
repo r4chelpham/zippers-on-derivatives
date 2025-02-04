@@ -28,6 +28,7 @@ library
       EdelmannZipper
       Lexer
       Rexp
+      RexpZipper
       TreeZipper
       Val
   other-modules:
@@ -69,6 +70,7 @@ test-suite zippers-on-derivatives-test
   other-modules:
       LexerSpec
       RexpSpec
+      RexpZipperSpec
       ValSpec
       Paths_zippers_on_derivatives
   autogen-modules:
