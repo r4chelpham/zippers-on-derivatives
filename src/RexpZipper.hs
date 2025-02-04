@@ -1,6 +1,5 @@
 module RexpZipper where
 import Test.QuickCheck
-import qualified Data.Map as Map
 
 type Sym = Char
 
@@ -59,11 +58,17 @@ der c (Zipper re ctx) = up re ctx
     -- down ct (RECD s r' es) = down (RecdC ct r' s es) r'
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
-    up e (SeqC ct s es []) = up (SEQ s (reverse(e:es))) ct
+    up e (SeqC ct s es [])
+        | c == '\0' && ct == TopC = 
+            [Zipper (SEQ s (reverse(e:es))) ct]
+        | otherwise = up (SEQ s (reverse(e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r)
-        | c == '\0' = [Zipper (STAR r (reverse (e:es))) ct]
+        | c == '\0' =
+            case ct of
+                TopC -> [Zipper (STAR r (reverse (e:es))) ct]
+                _ -> up (STAR r (reverse(e:es))) ct 
         | otherwise =
             let ct2 = StarC ct (e:es) r
                 zs = down ct2 r in
