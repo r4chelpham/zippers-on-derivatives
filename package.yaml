@@ -25,6 +25,7 @@ dependencies:
 - hspec >= 2.11.10
 - QuickCheck >= 2.14.3
 - hspec-discover
+- unordered-containers >= 0.2.20
 
 ghc-options:
 - -Wall
