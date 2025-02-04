@@ -62,23 +62,30 @@ der c (Zipper re ctx) = up re ctx
     up e (SeqC ct s es []) = up (SEQ s (reverse(e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
-    -- up e (StarC ct es r)
-    --     | c == '\0' = [Zipper (STAR r (reverse (e:es))) ct]
-    --     | otherwise =
-    --         let ct2 = StarC ct (e:es) r
-    --             zs = down ct2 r in
-    --                 if null zs then
-    --                     up (STAR r (reverse (e:es))) ct
-    --                 else zs
+    up e (StarC ct es r)
+        | c == '\0' = [Zipper (STAR r (reverse (e:es))) ct]
+        | otherwise =
+            let ct2 = StarC ct (e:es) r
+                zs = down ct2 r in
+                    if null zs then
+                        up (STAR r (reverse (e:es))) ct
+                    else zs
     -- up e (RecdC ct r s es)
     --     | c == '\0' = up (RECD s r [e]) ct 
     --     | otherwise = down (RecdC ct r s (e:es)) e
 
 ders :: [Char] -> [Zipper] -> [Zipper]
-ders cs zs = foldl (\ z c -> concatMap (der c) z) zs cs
+ders cs zs = 
+    let res = foldl (\ z c -> concatMap (der c) z) zs cs in
+        der '\0' (head res)
 
 matcher :: [Char] -> Exp -> Bool
 matcher s r = not $ null $ ders s [focus r]
+
+lex :: [Char] -> Exp -> [Char]
+lex cs e = 
+    let (Zipper re _) = head (ders cs [focus e]) in
+        flatten re
 
 flatten :: Exp -> [Char]
 flatten ZERO = error "Cannot flatten ZERO"
