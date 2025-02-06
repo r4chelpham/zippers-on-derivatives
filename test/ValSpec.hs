@@ -10,21 +10,21 @@ spec = do
         it "returns empty string for Empty" $ do
             flatten Empty `shouldBe` []
         
-        it "returns a string consisting of a single character for Chr" $ do
-            property $ \c ->
+        it "returns a string consisting of a single character for Chr" $ property $ 
+            \c ->
                 case flatten(Chr c) of 
                     [d] -> c == d
                     _ -> False
 
         -- TODO: fix this...
-        -- it "flattens Sequ by concatenating components" $ do
-        --     property $ \v1 v2 -> flatten (Sequ v1 v2) == flatten v1 ++ flatten v2
+        -- it "flattens Sequ by concatenating components" $ property $ 
+            -- \v1 v2 -> flatten (Sequ v1 v2) == flatten v1 ++ flatten v2
 
-        -- it "flattens Stars by concatenating all elements" $ do
-        --     property $ \vs -> flatten (Stars vs) == concatMap flatten vs
+        -- it "flattens Stars by concatenating all elements" $ property $ 
+        --     \vs -> flatten (Stars vs) == concatMap flatten vs
 
-        -- it "flattens Rec as its contained value" $ do
-        --     property $ \label v -> flatten (Rec label v) == flatten v
+        -- it "flattens Rec as its contained value" $ property $ 
+        --     \label v -> flatten (Rec label v) == flatten v
 
         it "flattens a Sequ by concatenating flattened components" $ do
             flatten (Sequ (Chr 'a') (Chr 'b')) `shouldBe` "ab"

@@ -29,6 +29,7 @@ library
       Lexer
       Rexp
       RexpZipper
+      Token
       TreeZipper
       Val
   other-modules:
