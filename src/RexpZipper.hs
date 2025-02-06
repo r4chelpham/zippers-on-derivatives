@@ -99,7 +99,7 @@ der c (Zipper re ctx) = up re ctx
                 else zs
     down ct r@(NTIMES 0 _ _ _) = up r ct
     down ct r@(NTIMES n e es nu)
-        | c == '\0' = []
+        | c == '\0' && not nu = []
         | otherwise =
             let zs = down (NTimesC ct (n-1) es e nu) e in
                 if null zs then
