@@ -1,6 +1,7 @@
 module RexpZipper where
 import Test.QuickCheck
 
+
 type Sym = Char
 
 data Exp = ZERO
@@ -47,10 +48,10 @@ instance Arbitrary Exp where
     arbitrary = oneof
         [ return ZERO
         , return ONE
-        , CHAR <$> arbitrary
-        , SEQ <$> arbitrary <*> listOf arbitrary
-        , ALT <$> listOf arbitrary
-        , STAR <$> arbitrary <*> listOf arbitrary
+        , CHAR Prelude.<$> arbitrary
+        , SEQ Prelude.<$> arbitrary <*> listOf arbitrary
+        , ALT Prelude.<$> listOf arbitrary
+        , STAR Prelude.<$> arbitrary <*> listOf arbitrary
         ]
 
 nullable :: Exp -> Bool
@@ -110,29 +111,29 @@ der c (Zipper re ctx) = up re ctx
     up _ TopC = []
     up e (SeqC ct s es [])
         | c == '\0' && ct == TopC =
+            -- zipper is at the top of the tree
             [Zipper (SEQ s [e]) ct]
         | otherwise = up (SEQ s (reverse (e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r)
-        | c == '\0' =
-            case ct of
-                TopC -> [Zipper (STAR r (reverse (e:es))) ct]
-                _ -> up (STAR r (reverse (e:es))) ct
+        | c == '\0' = up (STAR r (reverse (e:es))) ct
         | otherwise =
-            let ct2 = StarC ct (e:es) r
+            let exps = e:es
+                ct2 = StarC ct exps r
                 zs = down ct2 r in
                     if null zs then
-                        up (STAR r es) ct
+                        up (STAR r (reverse exps)) ct
                     else zs
     up e (PlusC ct es r)
         | c == '\0' =
             if null es then [] else up (PLUS r (reverse (e:es))) ct
         | otherwise =
-            let ct2 = PlusC ct (e:es) r
+            let exps = (e:es)
+                ct2 = PlusC ct exps r
                 zs = down ct2 r in
                     if null zs then
-                        up (PLUS r (reverse (e:es))) ct
+                        up (PLUS r (reverse exps)) ct
                     else zs
     up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
     up e (NTimesC ctt n es r nu)
@@ -189,3 +190,51 @@ env (PLUS _ es) = concatMap env es
 env (NTIMES _ _ es _) = concatMap env es
 env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
 
+{- Converting a string to a regular expression 
+without explicitly using the constructors -}
+class ToExp a where
+  toExp :: a -> Exp
+
+instance ToExp Exp where
+  toExp :: Exp -> Exp
+  toExp = id 
+
+instance ToExp String where
+  toExp = defaultSEQ . map CHAR  
+
+infixl 9 ^>
+infixl 8 ?>
+infixl 7 +>
+infixl 6 *>
+infixl 4 <~>
+infixl 3 <|>
+infixl 1 <$>
+
+(<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
+a <~> b = 
+    case (toExp a, toExp b) of
+        (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
+        (ae, be) -> defaultSEQ [ae,be]
+
+(<|>) :: (ToExp a, ToExp b) => a -> b -> Exp
+a <|> b = 
+    case (toExp a, toExp b) of
+        (ALT xs, ALT ys) -> ALT (xs ++ ys)
+        (ALT xs, be) -> ALT (be:xs)
+        (ae, ALT ys) -> ALT (ae:ys)
+        (ae, be) -> ALT [ae, be]
+
+(<$>) :: String -> Exp -> Exp
+s <$> r = defaultRECD s r
+
+(*>) :: ToExp a => a -> b -> Exp
+r *> _ = defaultSTAR (toExp r)
+
+(+>) :: ToExp a => a -> b -> Exp
+r +> _ = defaultPLUS (toExp r)
+
+(?>) :: ToExp a => a -> b -> Exp
+r ?> _ = defaultOPTIONAL (toExp r)
+
+(^>) :: ToExp a => a -> Int -> Exp
+r ^> n = defaultNTIMES n (toExp r)
