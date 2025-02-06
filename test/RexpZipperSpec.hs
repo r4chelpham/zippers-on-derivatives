@@ -27,8 +27,8 @@ spec = do
         it "derivative of a character with a different character is empty" $ do
             Z.der 'b' (Z.focus (Z.CHAR 'a')) `shouldBe` []
 
-        it "derivative of ZERO is always empty (property-based)" $
-            property $ \c -> null (Z.der c (Z.focus Z.ZERO))
+        it "derivative of ZERO is always empty" $ property $ 
+            \c -> null (Z.der c (Z.focus Z.ZERO))
 
         it "derivative of ALT with matching character should return correct result" $ do
             let r = Z.ALT [Z.CHAR 'a', Z.CHAR 'b', Z.CHAR 'c']
@@ -56,21 +56,22 @@ spec = do
             resultB `shouldNotBe` []
 
         it "derivative of NTIMES should decrease count when matching" $ do
-            let e = Z.NTIMES 3 (Z.CHAR 'a') []
+            let e = Z.defaultNTIMES 3 (Z.CHAR 'a')
             let result = Z.der 'a' (Z.focus e)
             result `shouldNotBe` []
 
-        -- it "derivative of NTIMES should reach zero correctly" $ do
-        --     let e = Z.NTIMES 1 (Z.CHAR 'a') []
-        --     let result = Z.ders "a" [Z.focus e]
-        --     case result of
-        --         [Z.Zipper (Z.SEQ _ es) _] -> es `elem` Z.NTIMES 0 (Z.CHAR 'a') _
-        --         _ -> False
+        it "derivative of NTIMES should reach zero correctly" $ do
+            let e = Z.defaultNTIMES 1 (Z.CHAR 'a')
+            let result = Z.ders "a" [Z.focus e]
+            case result of
+                [Z.Zipper (Z.SEQ _ es) _] -> 
+                    any (\(Z.NTIMES 0 (Z.CHAR 'a') _ _) -> True) es
+                _ -> False
 
         it "derivative of NTIMES should fail if unmatched character" $ do
-            let e = Z.NTIMES 3 (Z.CHAR 'a') []
+            let e = Z.defaultNTIMES 3 (Z.CHAR 'a')
             let result = Z.der 'b' (Z.focus e)
-            result `shouldBe` []  -- No valid derivative
+            result `shouldBe` []
 
     describe "ders" $ do
         it "multiple derivatives of a simple sequence" $ do
@@ -84,14 +85,14 @@ spec = do
             result `shouldBe` []
 
         it "NTIMES with STAR inside should repeat correctly" $ do
-            let e = Z.NTIMES 2 (Z.STAR (Z.CHAR 'a') []) []
+            let e = Z.defaultNTIMES 2 (Z.STAR (Z.CHAR 'a') [])
             let result = Z.ders "aaa" [Z.focus e]
-            result `shouldNotBe` [] -- Should allow repeated 'a's
+            result `shouldNotBe` []
 
         it "NTIMES within SEQ should process correctly" $ do
-            let e = Z.SEQ 's' [Z.NTIMES 2 (Z.CHAR 'a') [], Z.CHAR 'b']
+            let e = Z.SEQ 's' [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
             let result = Z.ders "aab" [Z.focus e]
-            result `shouldNotBe` []  -- Should match correctly
+            result `shouldNotBe` []
 
     describe "matcher" $ do
         it "matches a simple string" $ do
@@ -136,14 +137,14 @@ spec = do
             Z.matcher "" r `shouldBe` True
 
         it "should recognize exact N repetitions" $ do
-            let r = Z.NTIMES 3 (Z.CHAR 'a') []
+            let r = Z.defaultNTIMES 3 (Z.CHAR 'a')
             Z.matcher "aaa" r `shouldBe` True
             Z.matcher "aa" r `shouldBe` False
             Z.matcher "aaaa" r `shouldBe` False
             Z.matcher "" r `shouldBe` False
 
         it "should work with NTIMES followed by other characters" $ do
-            let r = Z.SEQ 's' [Z.NTIMES 2 (Z.CHAR 'a') [], Z.CHAR 'b']
+            let r = Z.SEQ 's' [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
             Z.matcher "aab" r `shouldBe` True
             Z.matcher "ab" r `shouldBe` False
             Z.matcher "aa" r `shouldBe` False
@@ -170,14 +171,14 @@ spec = do
         it "returns a concatenated list of flattened expressions for STAR" $ do
             Z.flatten (Z.STAR (Z.ALT [Z.CHAR 'b', Z.CHAR 'c']) [Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []]) `shouldBe` ['b', 'c']
 
-        -- it "returns a flattened list from the nested expression in RECD" $ do
-        --     Z.flatten (Z.RECD "1" (Z.SEQ 'a' [Z.SEQ 'b' [], Z.ONE]) []) `shouldBe` ['a', 'b']
+        it "returns a flattened list from the nested expression in RECD" $ property $
+            \r -> Z.flatten (Z.RECD "1" r [Z.SEQ 'a' [Z.SEQ 'b' [], Z.ONE]]) `shouldBe` ['a', 'b']
 
         it "correctly flattens deeply nested expressions" $ do
             Z.flatten (Z.ALT [Z.SEQ 'x' [Z.STAR (Z.CHAR 'z') []], Z.SEQ 'a' [Z.ONE]]) `shouldBe` ['x', 'a']
 
         it "NTIMES inside ALT should allow correct branching" $ do
-            let exp = Z.ALT [Z.NTIMES 2 (Z.CHAR 'a') [], Z.CHAR 'b']
+            let exp = Z.ALT [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
             let resultA = Z.ders "aa" [Z.focus exp]
             let resultB = Z.ders "b" [Z.focus exp]
             resultA `shouldNotBe` []

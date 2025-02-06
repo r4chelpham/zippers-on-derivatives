@@ -11,7 +11,7 @@ data Exp = ZERO
             | STAR Exp [Exp]
             | PLUS Exp [Exp] -- equivalent to SEQ r, STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
             -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
-            | NTIMES Int Exp [Exp] -- the Exp it represents, the processed Exps
+            | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
 
 defaultSEQ :: [Exp] -> Exp
@@ -26,8 +26,8 @@ defaultPLUS r = SEQ '\0' [r, STAR r []]
 defaultOPTIONAL :: Exp -> Exp
 defaultOPTIONAL r = ALT [ONE, r]
 
-defaultNTIMES :: Exp -> Int -> Exp
-defaultNTIMES r n = NTIMES n r []
+defaultNTIMES :: Int -> Exp -> Exp
+defaultNTIMES n r = NTIMES n r [] (nullable r)
 
 defaultRECD :: String -> Exp -> Exp
 defaultRECD s e = RECD s e []
@@ -38,7 +38,7 @@ data Context = TopC
             | StarC Context [Exp] Exp
             | PlusC Context [Exp] Exp
             -- | OptionalC Context [Exp] Exp
-            | NTimesC Context Int [Exp] Exp
+            | NTimesC Context Int [Exp] Exp Bool
             | RecdC Context Exp [Char] [Exp] deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp Context deriving (Ord, Eq, Show)
@@ -58,12 +58,12 @@ nullable ZERO = False
 nullable ONE = True
 nullable (CHAR _) = False
 nullable (ALT es) = any nullable es
-nullable (SEQ _ es) = all nullable es 
+nullable (SEQ _ es) = all nullable es
 nullable (STAR _ _) = True
 nullable (PLUS e _) = nullable e
 -- nullable OPTIONAL _ = True
-nullable (NTIMES 0 _ _) = True
-nullable (NTIMES _ r _) = nullable r
+nullable (NTIMES 0 _ _ _) = True
+nullable (NTIMES _ r _ _) = nullable r
 nullable (RECD _ r _) = nullable r
 
 focus :: Exp -> Zipper
@@ -97,11 +97,11 @@ der c (Zipper re ctx) = up re ctx
                 if null zs then
                     up r ct
                 else zs
-    down ct r@(NTIMES 0 _ _) = up r ct
-    down ct r@(NTIMES n e es)
+    down ct r@(NTIMES 0 _ _ _) = up r ct
+    down ct r@(NTIMES n e es nu)
         | c == '\0' = []
         | otherwise =
-            let zs = down (NTimesC ct (n-1) es e) e in
+            let zs = down (NTimesC ct (n-1) es e nu) e in
                 if null zs then
                     up r ct
                 else zs
@@ -126,7 +126,7 @@ der c (Zipper re ctx) = up re ctx
                         up (STAR r es) ct
                     else zs
     up e (PlusC ct es r)
-        | c == '\0' = 
+        | c == '\0' =
             if null es then [] else up (PLUS r (reverse (e:es))) ct
         | otherwise =
             let ct2 = PlusC ct (e:es) r
@@ -134,23 +134,19 @@ der c (Zipper re ctx) = up re ctx
                     if null zs then
                         up (PLUS r (reverse (e:es))) ct
                     else zs
-    -- TODO: Fix for matching a STAR within NTIMES
-    -- Problem: I can match the empty string on its own, but then
-    -- if I have a STAR in an NTIMES for example, I can't match
-    -- the NTIMES case because it never updates the counter  
-    up e (NTimesC ct 0 es r) = up (NTIMES 0 r (reverse (e:es))) ct
-    up e (NTimesC ctt n es r)
+    up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
+    up e (NTimesC ctt n es r nu)
         | c == '\0' =
-            if n /= 0 then [] else
+            if n /= 0 && not nu then [] else
             let exps = reverse (e:es) in
             case ctt of
-                TopC -> [Zipper (NTIMES (n-1) r exps) ctt]
-                _ -> up (NTIMES (n-1) r exps) ctt
+                TopC -> [Zipper (NTIMES (n - 1) r exps nu) ctt]
+                _ -> up (NTIMES (n - 1) r exps nu) ctt
         | otherwise =
             let exps = (e:es) in
-            down (NTimesC ctt (n-1) exps r) r
+            down (NTimesC ctt (n-1) exps r nu) r
     up e (RecdC ct r s es)
-        | c == '\0' = up (RECD s r [e]) ct 
+        | c == '\0' = up (RECD s r [e]) ct
         | otherwise = down (RecdC ct r s (e:es)) e
 
 ders :: [Char] -> [Zipper] -> [Zipper]
@@ -179,7 +175,7 @@ flatten (SEQ s es)
 flatten (ALT es) = concatMap flatten es
 flatten (STAR _ es) = concatMap flatten es
 flatten (PLUS _ es) = concatMap flatten es
-flatten (NTIMES _ _ es) = concatMap flatten es
+flatten (NTIMES _ _ es _) = concatMap flatten es
 flatten (RECD _ _ es) = concatMap flatten es
 
 env :: Exp -> [([Char], [Char])]
@@ -190,5 +186,6 @@ env (ALT es) = concatMap env es
 env (SEQ _ es) = concatMap env es
 env (STAR _ es) = concatMap env es
 env (PLUS _ es) = concatMap env es
-env (NTIMES _ _ es) = concatMap env es
+env (NTIMES _ _ es _) = concatMap env es
 env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
+
