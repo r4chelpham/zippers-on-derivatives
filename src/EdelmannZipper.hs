@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# HLINT ignore "Use foldl" #-}
 module EdelmannZipper where
 
 import Rexp

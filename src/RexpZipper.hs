@@ -1,12 +1,18 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE InstanceSigs #-}
+
 module RexpZipper where
 import Test.QuickCheck
-
+import Token ( Token, token )
+import qualified Data.Set as Set
 
 type Sym = Char
 
 data Exp = ZERO
             | ONE
             | CHAR Char
+            | RANGE (Set.Set Char)
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp [Exp]
@@ -49,6 +55,7 @@ instance Arbitrary Exp where
         [ return ZERO
         , return ONE
         , CHAR Prelude.<$> arbitrary
+        , RANGE Prelude.<$> arbitrary
         , SEQ Prelude.<$> arbitrary <*> listOf arbitrary
         , ALT Prelude.<$> listOf arbitrary
         , STAR Prelude.<$> arbitrary <*> listOf arbitrary
@@ -58,6 +65,7 @@ nullable :: Exp -> Bool
 nullable ZERO = False
 nullable ONE = True
 nullable (CHAR _) = False
+nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
 nullable (STAR _ _) = True
@@ -80,6 +88,9 @@ der c (Zipper re ctx) = up re ctx
         | otherwise = []
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
+        | otherwise = []
+    down ct (RANGE cs)
+        | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
     down ct (SEQ s (e:es)) = down (SeqC ct s [] es) e
@@ -158,15 +169,11 @@ ders cs zs =
 matcher :: [Char] -> Exp -> Bool
 matcher s r = not $ null $ ders s [focus r]
 
-lex :: [Char] -> Exp -> [Char]
-lex cs e =
-    let (Zipper re _) = head (ders cs [focus e]) in
-        flatten re
-
 flatten :: Exp -> [Char]
 flatten ZERO = error "Cannot flatten ZERO"
 flatten ONE = []
 flatten (CHAR _) = []
+flatten (RANGE _) = []
 flatten (SEQ c [])
     | c == '\0' = []
     | otherwise = [c]
@@ -183,12 +190,18 @@ env :: Exp -> [([Char], [Char])]
 env ZERO = error "ZERO is an invalid input for `env`"
 env ONE = []
 env (CHAR _) = []
+env (RANGE _) = []
 env (ALT es) = concatMap env es
 env (SEQ _ es) = concatMap env es
 env (STAR _ es) = concatMap env es
 env (PLUS _ es) = concatMap env es
 env (NTIMES _ _ es _) = concatMap env es
 env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
+
+lexZipper :: [Char] -> Exp -> [([Char], [Char])]
+lexZipper cs e =
+    let (Zipper re _) = head (ders cs [focus e]) in
+        env re
 
 {- Converting a string to a regular expression 
 without explicitly using the constructors -}
@@ -238,3 +251,64 @@ r ?> _ = defaultOPTIONAL (toExp r)
 
 (^>) :: ToExp a => a -> Int -> Exp
 r ^> n = defaultNTIMES n (toExp r)
+
+{- WHILE Language registers - NOTE: doesn't work rn -}
+
+keyword :: Exp
+keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|> 
+          "to" <|> "true" <|> "false" <|> "read" <|> "write" <|> 
+          "skip" <|> "break"
+
+op :: Exp
+op = "+" <|> "-" <|> "*" <|> "%" <|> "/" <|> "==" <|> "!=" <|> ">" <|> 
+     "<" <|> "<=" <|> ">=" <|> ":=" <|> "&&" <|> "||"
+
+lett :: Exp
+lett = RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z'])
+
+sym :: Exp
+sym = lett <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
+
+parens :: Exp
+parens = RANGE $ Set.fromList ['(', ')', '{', '}']
+
+digit :: Exp
+digit = RANGE $ Set.fromList ['0'..'9']
+
+semi :: Exp
+semi = toExp ";"
+
+whitespace :: Exp
+whitespace = (" " <|> "\n" <|> "\t" <|> "\r") +> ()
+
+identifier :: Exp
+identifier = lett <~> (("_" <|> lett <|> digit) RexpZipper.*> ())
+
+numbers :: Exp
+numbers = "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipper.*> ()))
+
+string :: Exp
+string = "\"" <~> ((sym <|> digit <|> parens <|> whitespace <|> "\n") RexpZipper.*> ()) <~> "\""
+
+eol :: Exp
+eol = "\n" <|> "\r\n"
+
+comment :: Exp
+comment = "//" <~> ((sym <|> parens <|> digit <|> toExp " ") RexpZipper.*> ()) <~> eol
+
+whileRegs :: Exp
+whileRegs = (("k" RexpZipper.<$> keyword)
+            <|> ("o" RexpZipper.<$> op)
+            <|> ("str" RexpZipper.<$> string)
+            <|> ("p" RexpZipper.<$> parens)
+            <|> ("s" RexpZipper.<$> semi)
+            <|> ("w" RexpZipper.<$> whitespace)
+            <|> ("i" RexpZipper.<$> identifier)
+            <|> ("n" RexpZipper.<$> numbers)
+            <|> ("c" RexpZipper.<$> comment)) RexpZipper.*> ()
+
+tokenise :: String -> [Token]
+tokenise s = map token $ filter isNotWhitespace $ lexZipper s whileRegs 
+  where isNotWhitespace ("w", _) = False
+        isNotWhitespace ("c", _) = False
+        isNotWhitespace _ = True
