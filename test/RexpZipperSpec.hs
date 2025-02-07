@@ -18,7 +18,7 @@ spec = do
 
         it "derivative of ONE with epsilon character produces empty SEQ" $ do
             let result = Z.der '\0' (Z.focus Z.ONE)
-            result `shouldBe` [Z.Zipper (Z.SEQ '\0' []) (Z.SeqC Z.TopC '\0' [Z.ONE] [])]
+            result `shouldBe` [Z.Zipper (Z.SEQ '\NUL' [Z.SEQ '\NUL' [Z.ONE]]) Z.TopC]
 
         it "derivative of a character with itself produces an empty SEQ" $ do
             let result = Z.der 'a' (Z.focus (Z.CHAR 'a'))
