@@ -13,7 +13,7 @@ data Exp = ZERO
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp [Exp]
-            | PLUS Exp [Exp] -- equivalent to SEQ r, STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
+            | PLUS Exp [Exp]
             -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
             | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
