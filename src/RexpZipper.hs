@@ -4,8 +4,24 @@
 module RexpZipper where
 import Test.QuickCheck
 
+import Control.Monad (forM_)
+import Data.IORef
+import qualified Data.HashMap.Strict as HM
 
+type Pos = Int
 type Sym = Char
+
+type Parents = IORef [Context]
+type Results = IORef (HM.HashMap Pos [Exp])
+data Mem = Mem Parents Results 
+
+type Key = (Pos, Exp)
+type Value = Mem
+type Mems = IORef (HM.HashMap Key Value)
+
+-- Default Mems
+newMems :: IO Mems
+newMems = newIORef HM.empty
 
 data Exp = ZERO
             | ONE
