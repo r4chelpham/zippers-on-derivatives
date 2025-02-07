@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+
 module RexpZipper where
 import Test.QuickCheck
 
@@ -10,7 +13,7 @@ data Exp = ZERO
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp [Exp]
-            | PLUS Exp [Exp] -- equivalent to SEQ r, STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
+            | PLUS Exp [Exp]
             -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
             | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
@@ -22,7 +25,7 @@ defaultSTAR :: Exp -> Exp
 defaultSTAR r = STAR r []
 
 defaultPLUS :: Exp -> Exp
-defaultPLUS r = SEQ '\0' [r, STAR r []]
+defaultPLUS r = PLUS r []
 
 defaultOPTIONAL :: Exp -> Exp
 defaultOPTIONAL r = ALT [ONE, r]
@@ -75,9 +78,7 @@ der c (Zipper re ctx) = up re ctx
     where
     down :: Context -> Exp -> [Zipper]
     down _ ZERO = []
-    down ct ONE
-        | c == '\0' = [Zipper (SEQ c []) ct]
-        | otherwise = []
+    down ct ONE = up (defaultSEQ [ONE]) ct
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
@@ -86,17 +87,16 @@ der c (Zipper re ctx) = up re ctx
     down ct (ALT es) = concatMap (down (AltC ct)) es
     down ct r@(STAR e es)
         | c == '\0' = up r ct
-        | otherwise =
+        | otherwise = 
             let zs = down (StarC ct es e) e in
-                if null zs then
-                    up r ct
+                if null zs then up (defaultSEQ [ONE]) ct
                 else zs
     down ct r@(PLUS e es)
-        | c == '\0' = up r ct
-        | otherwise =
-            let zs = down (PlusC ct es e) e in
+        | c == '\0' = if null es then [] else up r ct
+        | otherwise = 
+            let zs = down (PlusC ct es e) e in 
                 if null zs then
-                    up r ct
+                    if null es then [] else up r ct
                 else zs
     down ct r@(NTIMES 0 _ _ _) = up r ct
     down ct r@(NTIMES n e es nu)
@@ -104,7 +104,7 @@ der c (Zipper re ctx) = up re ctx
         | otherwise =
             let zs = down (NTimesC ct (n-1) es e nu) e in
                 if null zs then
-                    up r ct
+                    if nu then up (defaultSEQ [ONE]) ct else up r ct
                 else zs
     down ct (RECD s r' es) = down (RecdC ct r' s es) r'
     up :: Exp -> Context -> [Zipper]
@@ -119,22 +119,17 @@ der c (Zipper re ctx) = up re ctx
     up e (StarC ct es r)
         | c == '\0' = up (STAR r (reverse (e:es))) ct
         | otherwise =
-            let exps = e:es
-                ct2 = StarC ct exps r
-                zs = down ct2 r in
+            let zs = down (StarC ct (e:es) r) r in
                     if null zs then
-                        up (STAR r (reverse exps)) ct
+                        up (STAR r (reverse (e:es))) ct
                     else zs
     up e (PlusC ct es r)
-        | c == '\0' =
-            if null es then [] else up (PLUS r (reverse (e:es))) ct
-        | otherwise =
-            let exps = (e:es)
-                ct2 = PlusC ct exps r
-                zs = down ct2 r in
-                    if null zs then
-                        up (PLUS r (reverse exps)) ct
-                    else zs
+        | c == '\0' = up (PLUS r (reverse (e:es))) ct
+        | otherwise = 
+            let zs = down (PlusC ct (e:es) r) r in 
+                if null zs then
+                    up (PLUS r (reverse (e:es))) ct
+                else zs
     up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
     up e (NTimesC ctt n es r nu)
         | c == '\0' =
@@ -197,10 +192,10 @@ class ToExp a where
 
 instance ToExp Exp where
   toExp :: Exp -> Exp
-  toExp = id 
+  toExp = id
 
 instance ToExp String where
-  toExp = defaultSEQ . map CHAR  
+  toExp = defaultSEQ . map CHAR
 
 infixl 9 ^>
 infixl 8 ?>
@@ -211,18 +206,18 @@ infixl 3 <|>
 infixl 1 <$>
 
 (<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
-a <~> b = 
-    case (toExp a, toExp b) of
-        (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
-        (ae, be) -> defaultSEQ [ae,be]
+a <~> b = defaultSEQ [toExp a, toExp b]
+    -- case (toExp a, toExp b) of
+    --     (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
+    --     (ae, be) -> defaultSEQ [ae,be]
 
 (<|>) :: (ToExp a, ToExp b) => a -> b -> Exp
-a <|> b = 
-    case (toExp a, toExp b) of
-        (ALT xs, ALT ys) -> ALT (xs ++ ys)
-        (ALT xs, be) -> ALT (be:xs)
-        (ae, ALT ys) -> ALT (ae:ys)
-        (ae, be) -> ALT [ae, be]
+a <|> b = ALT [toExp a, toExp b]
+    -- case (toExp a, toExp b) of
+    --     (ALT xs, ALT ys) -> ALT (xs ++ ys)
+    --     (ALT xs, be) -> ALT (be:xs)
+    --     (ae, ALT ys) -> ALT (ae:ys)
+    --     (ae, be) -> ALT [ae, be]
 
 (<$>) :: String -> Exp -> Exp
 s <$> r = defaultRECD s r
