@@ -89,7 +89,7 @@ der c (Zipper re ctx) = up re ctx
         | c == '\0' = up r ct
         | otherwise = 
             let zs = down (StarC ct es e) e in
-                if null zs then up (defaultSEQ [ONE]) ct
+                if null zs then up r ct
                 else zs
     down ct r@(PLUS e es)
         | c == '\0' = if null es then [] else up r ct
