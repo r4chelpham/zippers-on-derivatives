@@ -78,7 +78,7 @@ der c (Zipper re ctx) = up re ctx
     where
     down :: Context -> Exp -> [Zipper]
     down _ ZERO = []
-    down ct ONE = up (defaultSEQ [ONE]) ct
+    down _ ONE = []
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
