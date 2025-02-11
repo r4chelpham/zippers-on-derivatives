@@ -3,6 +3,7 @@
 
 module RexpZipper where
 import Test.QuickCheck
+import qualified Data.Set as Set
 
 
 type Sym = Char
@@ -10,6 +11,7 @@ type Sym = Char
 data Exp = ZERO
             | ONE
             | CHAR Char
+            | RANGE (Set.Set Char)
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp [Exp]
@@ -71,6 +73,7 @@ nullable :: Exp -> Bool
 nullable ZERO = False
 nullable ONE = True
 nullable (CHAR _) = False
+nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
 nullable (STAR _ _) = True
@@ -112,6 +115,9 @@ der c (Zipper re ctx) = up re ctx
     down _ ONE = []
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
+        | otherwise = []
+    down ct (RANGE cs)
+        | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
     down ct (SEQ s (e:es)) =
@@ -209,12 +215,16 @@ isNullable (RecdC ct _ _ _) = isNullable ct
 
     TODO: fix this
 -}
-lex :: [Char] -> Exp -> [Char]
-lex cs e =
-    let z@(Zipper re ctx) = head (ders cs [focus e]) in
+lexing :: [Char] -> Exp -> Exp
+lexing cs e =
+    let Zipper re ctx = head (ders cs [focus e]) in
         if isNullable ctx && nullable re then
-            flatten re
+            let (Zipper r' _) = plug re ctx in
+                r'
         else error "Could not lex"
+
+lexSimp :: [Char] -> Exp -> [([Char], [Char])]
+lexSimp s r = env $ lexing s r
 
 plug :: Exp -> Context -> Zipper
 plug e (SeqC TopC _ _ _) = Zipper e TopC
@@ -229,6 +239,7 @@ flatten :: Exp -> [Char]
 flatten ZERO = error "Cannot flatten ZERO"
 flatten ONE = []
 flatten (CHAR _) = []
+flatten (RANGE _) = []
 flatten (SEQ c [])
     | c == '\0' = []
     | otherwise = [c]
@@ -245,6 +256,7 @@ env :: Exp -> [([Char], [Char])]
 env ZERO = error "ZERO is an invalid input for `env`"
 env ONE = []
 env (CHAR _) = []
+env (RANGE _) = []
 env (ALT es) = concatMap env es
 env (SEQ _ es) = concatMap env es
 env (STAR _ es) = concatMap env es
