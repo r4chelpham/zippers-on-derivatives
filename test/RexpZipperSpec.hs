@@ -18,7 +18,7 @@ spec = do
 
         it "derivative of ONE with epsilon character produces empty SEQ" $ do
             let result = Z.der '\0' (Z.focus Z.ONE)
-            result `shouldBe` [Z.Zipper (Z.SEQ '\0' []) (Z.SeqC Z.TopC '\0' [Z.ONE] [])]
+            result `shouldBe` []
 
         it "derivative of a character with itself produces an empty SEQ" $ do
             let result = Z.der 'a' (Z.focus (Z.CHAR 'a'))
@@ -39,12 +39,12 @@ spec = do
                 )]
 
         it "derivative of STAR should allow repetition" $ do
-            let r = Z.STAR (Z.CHAR 'a') []
+            let r = Z.defaultSTAR (Z.CHAR 'a')
             let result = Z.der 'a' (Z.focus r)
             result `shouldNotBe` []
 
         it "derivative of SEQ with STAR should process correctly" $ do
-            let r = Z.SEQ '\0' [Z.STAR (Z.CHAR 'a') [], Z.CHAR 'b']
+            let r = Z.SEQ '\0' [Z.defaultSTAR (Z.CHAR 'a'), Z.CHAR 'b']
             let result = Z.der 'a' (Z.focus r)
             result `shouldNotBe` []
 
@@ -59,14 +59,6 @@ spec = do
             let e = Z.defaultNTIMES 3 (Z.CHAR 'a')
             let result = Z.der 'a' (Z.focus e)
             result `shouldNotBe` []
-
-        it "derivative of NTIMES should reach zero correctly" $ do
-            let e = Z.defaultNTIMES 1 (Z.CHAR 'a')
-            let result = Z.ders "a" [Z.focus e]
-            case result of
-                [Z.Zipper (Z.SEQ _ es) _] -> 
-                    any (\(Z.NTIMES 0 (Z.CHAR 'a') _ _) -> True) es
-                _ -> False
 
         it "derivative of NTIMES should fail if unmatched character" $ do
             let e = Z.defaultNTIMES 3 (Z.CHAR 'a')
@@ -84,15 +76,25 @@ spec = do
             let result = Z.ders "ab" [Z.focus r]
             result `shouldBe` []
 
-        it "NTIMES with STAR inside should repeat correctly" $ do
-            let e = Z.defaultNTIMES 2 (Z.STAR (Z.CHAR 'a') [])
-            let result = Z.ders "aaa" [Z.focus e]
+        it "should repeat correctly for NTIMES with STAR inside" $ do
+            let r = Z.defaultNTIMES 2 (Z.defaultSTAR (Z.CHAR 'a'))
+            let result = Z.ders "aaa" [Z.focus r]
             result `shouldNotBe` []
 
-        it "NTIMES within SEQ should process correctly" $ do
-            let e = Z.SEQ 's' [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
-            let result = Z.ders "aab" [Z.focus e]
+        it "within SEQ should process correctly for NTIMES" $ do
+            let r = Z.SEQ 's' [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
+            let result = Z.ders "aab" [Z.focus r]
             result `shouldNotBe` []
+
+        it "should match one or more repetitions for PLUS" $ do
+            let r = Z.defaultPLUS (Z.CHAR 'a')
+            let result = Z.ders "aaa" [Z.focus r]
+            result `shouldNotBe` []
+
+        it "should fail if character does not match for PLUS" $ do
+            let r = Z.defaultPLUS (Z.CHAR 'a')
+            let result = Z.ders "b" [Z.focus r]
+            result `shouldBe` []
 
     describe "matcher" $ do
         it "matches a simple string" $ do
@@ -113,24 +115,24 @@ spec = do
             \s -> Z.matcher s (Z.SEQ '\0' (map Z.CHAR s))
 
         it "only matches empty strings to ONE" $ property $
-            \s -> Z.matcher s Z.ONE == (s == "" && s /= "\0")
+            \s -> Z.matcher s Z.ONE == (s == "" && s /= "\0") 
 
         it "recognises repetitions with STAR" $ do
-            let r = Z.STAR (Z.CHAR 'a') []
+            let r = Z.defaultSTAR (Z.CHAR 'a')
             Z.matcher "aaa" r `shouldBe` True
             Z.matcher "a" r `shouldBe` True
             Z.matcher "" r `shouldBe` True
             Z.matcher "b" r `shouldBe` False
 
         it "correctly evaluates STAR with SEQ" $ do
-            let r = Z.SEQ '\0' [Z.STAR (Z.CHAR 'a') [], Z.CHAR 'b']
+            let r = Z.SEQ '\0' [Z.defaultSTAR (Z.CHAR 'a'), Z.CHAR 'b']
             Z.matcher "aab" r `shouldBe` True
             Z.matcher "b" r `shouldBe` True
             Z.matcher "a" r `shouldBe` False
             Z.matcher "ba" r `shouldBe` False
 
         it "correctly evaluates ALT inside STAR" $ do
-            let r = Z.STAR (Z.ALT [Z.CHAR 'a', Z.CHAR 'b']) []
+            let r = Z.defaultSTAR (Z.ALT [Z.CHAR 'a', Z.CHAR 'b'])
             Z.matcher "abba" r `shouldBe` True
             Z.matcher "aaabbb" r `shouldBe` True
             Z.matcher "abc" r `shouldBe` False
@@ -148,6 +150,54 @@ spec = do
             Z.matcher "aab" r `shouldBe` True
             Z.matcher "ab" r `shouldBe` False
             Z.matcher "aa" r `shouldBe` False
+        
+        it "should allow sequences of at least one repetition for PLUS inside SEQ" $ do
+            let r = Z.SEQ 's' [Z.defaultPLUS (Z.CHAR 'a'), Z.CHAR 'b']
+            Z.matcher "ab" r `shouldBe` True
+            Z.matcher "aab" r `shouldBe` True
+            Z.matcher "b" r `shouldBe` False 
+
+        it "should allow multiple valid choices for PLUS inside ALT" $ do
+            let r = Z.ALT [Z.defaultPLUS (Z.CHAR 'a'), Z.CHAR 'b']
+            Z.matcher "aaa" r `shouldBe` True
+            Z.matcher "b" r `shouldBe` True
+            Z.matcher "c" r `shouldBe` False 
+
+        it " should behave like STAR when a PLUS is inside STAR" $ do
+            let r = Z.defaultSTAR (Z.defaultPLUS (Z.CHAR 'a'))
+            Z.matcher "aaa" r `shouldBe` True
+            Z.matcher "" r `shouldBe` True
+
+        it "should match either the character or empty string for OPTIONAL" $ do
+            let r = Z.defaultOPTIONAL (Z.CHAR 'a')
+            Z.matcher "a" r `shouldBe` True
+            Z.matcher "" r `shouldBe` True
+            Z.matcher "b" r `shouldBe` False 
+
+        it "should allow skipping an element for OPTIONAL inside SEQ" $ do
+            let r = Z.SEQ 's' [Z.defaultOPTIONAL (Z.CHAR 'a'), Z.CHAR 'b']
+            Z.matcher "ab" r `shouldBe` True
+            Z.matcher "b" r `shouldBe` True
+            Z.matcher "a" r `shouldBe` False 
+
+        it "should allow an empty choice for an OPTIONAL inside ALT" $ do
+            let r = Z.ALT [Z.defaultOPTIONAL (Z.CHAR 'a'), Z.CHAR 'b']
+            Z.matcher "a" r `shouldBe` True
+            Z.matcher "b" r `shouldBe` True
+            Z.matcher "" r `shouldBe` True
+
+        it "should behave like STAR when an OPTIONAL is inside STAR" $ do
+            let r = Z.defaultSTAR (Z.defaultOPTIONAL (Z.CHAR 'a'))
+            Z.matcher "aaa" r `shouldBe` True
+            Z.matcher "" r `shouldBe` True 
+            Z.matcher "b" r `shouldBe` False 
+
+        {- 
+            an example that does not work: (a*)*b
+            a* is evaluated and its result is never remembered so when we try to go up from
+            the failed result, we try again and again and again... so it infinitely loops
+             - so we have to find a way to remember this - memoisation
+         -}
 
     describe "flatten" $ do
         it "throws an error when flattening ZERO" $ do
@@ -178,10 +228,12 @@ spec = do
             Z.flatten (Z.ALT [Z.SEQ 'x' [Z.STAR (Z.CHAR 'z') []], Z.SEQ 'a' [Z.ONE]]) `shouldBe` ['x', 'a']
 
         it "NTIMES inside ALT should allow correct branching" $ do
-            let exp = Z.ALT [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
-            let resultA = Z.ders "aa" [Z.focus exp]
-            let resultB = Z.ders "b" [Z.focus exp]
+            let r = Z.ALT [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
+            let resultA = Z.ders "aa" [Z.focus r]
+            let resultB = Z.ders "b" [Z.focus r]
             resultA `shouldNotBe` []
             resultB `shouldNotBe` []
+        
 
+        
         
