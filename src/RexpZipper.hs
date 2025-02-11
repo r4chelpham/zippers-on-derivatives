@@ -83,75 +83,75 @@ der c (Zipper re ctx) = up re ctx
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
-    down ct (SEQ s (e:es)) = down (SeqC ct s [] es) e
+    down ct r@(SEQ s (e:es)) = 
+        let zs = down (SeqC ct s [] es) e in
+        if nullable e && null zs then
+            up r (SeqC ct s [] es)
+        else zs
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct r@(STAR e es)
-        | c == '\0' = up r ct
-        | otherwise = 
-            let zs = down (StarC ct es e) e in
-                if null zs then up r ct
-                else zs
-    down ct r@(PLUS e es)
-        | c == '\0' = if null es then [] else up r ct
-        | otherwise = 
-            let zs = down (PlusC ct es e) e in 
-                if null zs then
-                    if null es then [] else up r ct
-                else zs
+    down ct r@(STAR e es) = 
+        let zs = down (StarC ct es e) e in
+            if null zs then
+                 up r ct
+            else zs 
+    down ct r@(PLUS e es) =
+        let zs = down (PlusC ct es e) e in
+            if null zs then
+                if null es then [] else up r ct
+            else zs
     down ct r@(NTIMES 0 _ _ _) = up r ct
-    down ct r@(NTIMES n e es nu)
-        | c == '\0' && not nu = []
-        | otherwise =
-            let zs = down (NTimesC ct (n-1) es e nu) e in
-                if null zs then
-                    if nu then up (defaultSEQ [ONE]) ct else up r ct
-                else zs
+    down ct r@(NTIMES n e es nu) =
+        let zs = down (NTimesC ct (n-1) es e nu) e in
+            if null zs then
+                if nu then up (defaultSEQ [ONE]) ct else up r ct
+            else zs
     down ct (RECD s r' es) = down (RecdC ct r' s es) r'
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
-    up e (SeqC ct s es [])
-        | c == '\0' && ct == TopC =
-            -- zipper is at the top of the tree
-            [Zipper (SEQ s [e]) ct]
-        | otherwise = up (SEQ s (reverse (e:es))) ct
+    up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
-    up e (StarC ct es r)
-        | c == '\0' = up (STAR r (reverse (e:es))) ct
-        | otherwise =
-            let zs = down (StarC ct (e:es) r) r in
-                    if null zs then
-                        up (STAR r (reverse (e:es))) ct
-                    else zs
-    up e (PlusC ct es r)
-        | c == '\0' = up (PLUS r (reverse (e:es))) ct
-        | otherwise = 
-            let zs = down (PlusC ct (e:es) r) r in 
-                if null zs then
-                    up (PLUS r (reverse (e:es))) ct
-                else zs
+    up e (StarC ct es r) =
+        let zs = down (StarC ct (e:es) r) r in 
+            if null zs then 
+                up (STAR r (reverse (e:es))) ct
+            else zs
+    up e (PlusC ct es r) =
+        let zs = down (PlusC ct (e:es) r) r in
+            if null zs then
+                up (PLUS r (reverse (e:es))) ct
+            else zs
     up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
-    up e (NTimesC ctt n es r nu)
-        | c == '\0' =
-            if n /= 0 && not nu then [] else
-            let exps = reverse (e:es) in
-            case ctt of
-                TopC -> [Zipper (NTIMES (n - 1) r exps nu) ctt]
-                _ -> up (NTIMES (n - 1) r exps nu) ctt
-        | otherwise =
-            let exps = (e:es) in
-            down (NTimesC ctt (n-1) exps r nu) r
-    up e (RecdC ct r s es)
-        | c == '\0' = up (RECD s r [e]) ct
-        | otherwise = down (RecdC ct r s (e:es)) e
+    up e (NTimesC ctt n es r nu) =
+        let exps = (e:es) in
+        down (NTimesC ctt (n-1) exps r nu) r
+    up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
 
 ders :: [Char] -> [Zipper] -> [Zipper]
-ders cs zs =
-    let res = foldl (\ z c -> concatMap (der c) z) zs cs in
-        if null res then [] else der '\0' (head res)
+ders [] zs = concatMap (\z@(Zipper r _)-> ([z | nullable r])) zs
+ders (c:cs) zs = ders cs (concatMap (der c) zs)
 
 matcher :: [Char] -> Exp -> Bool
-matcher s r = not $ null $ ders s [focus r]
+matcher [] r = nullable r
+matcher s r =
+    let zs = ders s [focus r] in
+        not (null zs) && any(\(Zipper _ ct) -> isNullable ct) zs
+
+{- 
+    The equivalent of going all the way up the zipper,
+    without recording the matched values.
+    Used for matching.
+-}
+isNullable :: Context -> Bool
+isNullable TopC = False
+isNullable (NTimesC ct n _ _ _) = n == 0 && isNullable ct
+isNullable (AltC ct) = isNullable ct
+isNullable (SeqC TopC _ _ _) = True
+isNullable (SeqC ct _ _ es) = null es && isNullable ct
+isNullable (StarC ct _ _) = isNullable ct
+isNullable (PlusC ct es _) = not (null es) && isNullable ct
+isNullable (RecdC ct _ _ _) = isNullable ct
+
 
 lex :: [Char] -> Exp -> [Char]
 lex cs e =
