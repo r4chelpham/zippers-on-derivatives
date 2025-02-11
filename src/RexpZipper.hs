@@ -18,6 +18,13 @@ data Exp = ZERO
             | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
 
+{-
+    Default constructors for Exps that remember how 
+    they were matched.
+
+    They all start off with having an empty list.
+-}
+
 defaultSEQ :: [Exp] -> Exp
 defaultSEQ = SEQ '\0'
 
@@ -57,6 +64,9 @@ instance Arbitrary Exp where
         , STAR Prelude.<$> arbitrary <*> listOf arbitrary
         ]
 
+{- 
+    Whether an Exp is nullable (can match the empty string).
+-}
 nullable :: Exp -> Bool
 nullable ZERO = False
 nullable ONE = True
@@ -70,9 +80,30 @@ nullable (NTIMES 0 _ _ _) = True
 nullable (NTIMES _ r _ _) = nullable r
 nullable (RECD _ r _) = nullable r
 
+{-
+    Creates a zipper that focuses on 
+    the expression.
+-}
+
 focus :: Exp -> Zipper
 focus r = Zipper r (SeqC TopC '\0' [] [r])
 
+{-
+    Derives the result of an Exp from one character:
+    The semantic derivative on a language L wrt a character c
+    is as follows: Der L c = { s | c:s is in L }
+
+    Hence the result of taking the successful derivative on 
+    a zipper is a zipper that focuses on c and remembers 
+    what was around it. 
+
+    It has two functions:
+    up - moves back up the zipper via its given Context 
+    (the parent it can traverse upwards from)
+    down - moves down the zipper via its given Exp 
+    (the child it can traverse downwards from)
+ 
+-}
 der ::  Char -> Zipper -> [Zipper]
 der c (Zipper re ctx) = up re ctx
     where
@@ -134,6 +165,14 @@ der c (Zipper re ctx) = up re ctx
     up e (NTimesC ctt n es r nu) = down (NTimesC ctt (n-1) (e:es) r nu) r
     up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
 
+{-
+    Derives an Exp from a String (List of characters)
+    It does so by taking successive derivatives on the Exp
+    wrt each front character of the string, until there are
+    no more characters in the string to process.
+
+    It then filters all of the zippers that are nullable.
+-}
 ders :: [Char] -> [Zipper] -> [Zipper]
 ders [] zs = concatMap (\z@(Zipper r _)-> ([z | nullable r])) zs
 ders (c:cs) zs = ders cs (concatMap (der c) zs)
@@ -145,9 +184,13 @@ matcher s r =
         not (null zs) && any (\(Zipper _ ct) -> isNullable ct) zs
 
 {- 
+    Whether the parent tree is valid - the resultant 
+    derivative taken can match the empty string.
+    
     The equivalent of going all the way up the zipper,
     without recording the matched values.
-    Used for matching.
+    
+    Used for matching
 -}
 isNullable :: Context -> Bool
 isNullable TopC = False
@@ -160,11 +203,27 @@ isNullable (StarC ct _ _) = isNullable ct
 -- isNullable (PlusC ct es _) = not (null es) && isNullable ct
 isNullable (RecdC ct _ _ _) = isNullable ct
 
+{-
+    Returns the lexed result from taking successive 
+    derivatives on the Exp wrt the string.
 
+    TODO: fix this
+-}
 lex :: [Char] -> Exp -> [Char]
 lex cs e =
-    let (Zipper re _) = head (ders cs [focus e]) in
-        flatten re
+    let z@(Zipper re ctx) = head (ders cs [focus e]) in
+        if isNullable ctx && nullable re then
+            flatten re
+        else error "Could not lex"
+
+plug :: Exp -> Context -> Zipper
+plug e (SeqC TopC _ _ _) = Zipper e TopC
+plug e (SeqC ct s es _) = plug (SEQ s (reverse(e:es))) ct
+plug e (AltC ct) = plug e ct
+plug e (StarC ct es r) = plug (STAR r (reverse (e:es))) ct
+plug e (NTimesC ct 0 es r _) = plug (NTIMES 0 r (reverse (e:es)) True) ct
+plug e (RecdC ct r s es) = plug (RECD s r (reverse (e:es))) ct
+plug _ _ = error "Could not find a path from the leaf to the root"
 
 flatten :: Exp -> [Char]
 flatten ZERO = error "Cannot flatten ZERO"
@@ -193,8 +252,10 @@ env (STAR _ es) = concatMap env es
 env (NTIMES _ _ es _) = concatMap env es
 env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
 
-{- Converting a string to a regular expression 
-without explicitly using the constructors -}
+{- 
+    Converting a string to a regular expression 
+    without explicitly using the constructors. 
+-}
 stringToExp :: [Char] -> Exp
 stringToExp [] = ONE
 stringToExp [c] = CHAR c
@@ -218,12 +279,14 @@ infixl 4 <~>
 infixl 3 <|>
 infixl 1 <$>
 
+-- TODO: fix this
 (<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
 a <~> b = defaultSEQ [toExp a, toExp b]
     -- case (toExp a, toExp b) of
     --     (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
     --     (ae, be) -> defaultSEQ [ae,be]
 
+-- TODO: fix this
 (<|>) :: (ToExp a, ToExp b) => a -> b -> Exp
 a <|> b = ALT [toExp a, toExp b]
     -- case (toExp a, toExp b) of
