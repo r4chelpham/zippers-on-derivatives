@@ -13,7 +13,7 @@ data Exp = ZERO
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp [Exp]
-            | PLUS Exp [Exp]
+            -- | PLUS Exp [Exp]
             -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
             | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
@@ -25,7 +25,7 @@ defaultSTAR :: Exp -> Exp
 defaultSTAR r = STAR r []
 
 defaultPLUS :: Exp -> Exp
-defaultPLUS r = PLUS r []
+defaultPLUS r = defaultSEQ [r, defaultSTAR r]
 
 defaultOPTIONAL :: Exp -> Exp
 defaultOPTIONAL r = ALT [ONE, r]
@@ -40,7 +40,7 @@ data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Context -- Alternate has one context shared between its children
             | StarC Context [Exp] Exp
-            | PlusC Context [Exp] Exp
+            -- | PlusC Context [Exp] Exp
             -- | OptionalC Context [Exp] Exp
             | NTimesC Context Int [Exp] Exp Bool
             | RecdC Context Exp [Char] [Exp] deriving (Ord, Eq, Show)
@@ -64,8 +64,8 @@ nullable (CHAR _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
 nullable (STAR _ _) = True
-nullable (PLUS e _) = nullable e
--- nullable OPTIONAL _ = True
+-- nullable (PLUS e _) = nullable e
+-- nullable (OPTIONAL _ _) = True
 nullable (NTIMES 0 _ _ _) = True
 nullable (NTIMES _ r _ _) = nullable r
 nullable (RECD _ r _) = nullable r
@@ -83,48 +83,55 @@ der c (Zipper re ctx) = up re ctx
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
-    down ct r@(SEQ s (e:es)) = 
-        let zs = down (SeqC ct s [] es) e in
-        if nullable e && null zs then
-            up r (SeqC ct s [] es)
-        else zs
+    down ct (SEQ s (e:es)) =
+        if nullable e then
+        down (SeqC ct s [] es) e ++ up (SEQ s es) (SeqC ct s [] es)
+        else down (SeqC ct s [] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct r@(STAR e es) = 
+    down ct r@(STAR e es) =
         let zs = down (StarC ct es e) e in
             if null zs then
                  up r ct
-            else zs 
-    down ct r@(PLUS e es) =
-        let zs = down (PlusC ct es e) e in
-            if null zs then
-                if null es then [] else up r ct
             else zs
+    -- down ct (OPTIONAL e es) =
+    --     if not (null es) then [] else
+    --     let zs = down (OptionalC ct es e) e in
+    --         if null zs then
+    --             up ONE (OptionalC ct es e)
+    --         else zs
+    -- down ct r@(PLUS e es) =
+    --     let zs = down (PlusC ct es e) e in
+    --         if null zs then
+    --             if null es then [] else up r ct
+    --         else zs
     down ct r@(NTIMES 0 _ _ _) = up r ct
     down ct r@(NTIMES n e es nu) =
-        let zs = down (NTimesC ct (n-1) es e nu) e in
+        let ctt = NTimesC ct (n-1) es e nu
+            zs = down ctt e in
+            if nu then zs ++ up ONE ctt else
             if null zs then
-                if nu then up (defaultSEQ [ONE]) ct else up r ct
+                up r ct
             else zs
     down ct (RECD s r' es) = down (RecdC ct r' s es) r'
+
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
     up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r) =
-        let zs = down (StarC ct (e:es) r) r in 
-            if null zs then 
+        let zs = down (StarC ct (e:es) r) r in
+            if null zs then
                 up (STAR r (reverse (e:es))) ct
             else zs
-    up e (PlusC ct es r) =
-        let zs = down (PlusC ct (e:es) r) r in
-            if null zs then
-                up (PLUS r (reverse (e:es))) ct
-            else zs
+    -- up e (OptionalC ct es r) = up (OPTIONAL r (reverse(e:es))) ct
+    -- up e (PlusC ct es r) =
+    --     let zs = down (PlusC ct (e:es) r) r in
+    --         if null zs then
+    --             up (PLUS r (reverse (e:es))) ct
+    --         else zs
     up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
-    up e (NTimesC ctt n es r nu) =
-        let exps = (e:es) in
-        down (NTimesC ctt (n-1) exps r nu) r
+    up e (NTimesC ctt n es r nu) = down (NTimesC ctt (n-1) (e:es) r nu) r
     up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
 
 ders :: [Char] -> [Zipper] -> [Zipper]
@@ -135,7 +142,7 @@ matcher :: [Char] -> Exp -> Bool
 matcher [] r = nullable r
 matcher s r =
     let zs = ders s [focus r] in
-        not (null zs) && any(\(Zipper _ ct) -> isNullable ct) zs
+        not (null zs) && any (\(Zipper _ ct) -> isNullable ct) zs
 
 {- 
     The equivalent of going all the way up the zipper,
@@ -149,7 +156,8 @@ isNullable (AltC ct) = isNullable ct
 isNullable (SeqC TopC _ _ _) = True
 isNullable (SeqC ct _ _ es) = null es && isNullable ct
 isNullable (StarC ct _ _) = isNullable ct
-isNullable (PlusC ct es _) = not (null es) && isNullable ct
+-- isNullable (OptionalC ct _ _) = isNullable ct
+-- isNullable (PlusC ct es _) = not (null es) && isNullable ct
 isNullable (RecdC ct _ _ _) = isNullable ct
 
 
@@ -170,7 +178,7 @@ flatten (SEQ s es)
     | otherwise = s:concatMap flatten es
 flatten (ALT es) = concatMap flatten es
 flatten (STAR _ es) = concatMap flatten es
-flatten (PLUS _ es) = concatMap flatten es
+-- flatten (PLUS _ es) = concatMap flatten es
 flatten (NTIMES _ _ es _) = concatMap flatten es
 flatten (RECD _ _ es) = concatMap flatten es
 
@@ -181,12 +189,17 @@ env (CHAR _) = []
 env (ALT es) = concatMap env es
 env (SEQ _ es) = concatMap env es
 env (STAR _ es) = concatMap env es
-env (PLUS _ es) = concatMap env es
+-- env (PLUS _ es) = concatMap env es
 env (NTIMES _ _ es _) = concatMap env es
 env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
 
 {- Converting a string to a regular expression 
 without explicitly using the constructors -}
+stringToExp :: [Char] -> Exp
+stringToExp [] = ONE
+stringToExp [c] = CHAR c
+stringToExp (c:cs) = defaultSEQ (CHAR c:map CHAR cs)
+
 class ToExp a where
   toExp :: a -> Exp
 
@@ -195,7 +208,7 @@ instance ToExp Exp where
   toExp = id
 
 instance ToExp String where
-  toExp = defaultSEQ . map CHAR
+  toExp = stringToExp
 
 infixl 9 ^>
 infixl 8 ?>
