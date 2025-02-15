@@ -412,17 +412,17 @@ pp ZERO        = "0\n"
 pp ONE         = "1\n"
 pp (CHAR c)     = c : "\n"
 pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
-pp (SEQ s es)  = "SEQ\n" ++ (if null es then "•" ++ [s] else pps es) ++ "\n"
+pp (SEQ s es)  =  (if null es then [s] else "SEQ\n" ++ pps es) ++ "\n"
 pp (ALT es) = "ALT\n" ++ pps es
-pp (STAR e es)    = "STAR\n" ++ pps [e]
-pp (RECD s e es)    = "RECD\n" ++ s ++ pps [e] ++ "\nMATCHED\n" ++ pps es
+pp (STAR e es)    = "STAR\n" ++ (if null es then pp e else pps es)
+pp (RECD s e es)    = "RECD\n" ++ s ++ "\n" ++ (if null es then pp e else pps es)
 
 ppz :: Zipper -> String
-ppz (Zipper r ct) = ppctx ct ++ pp r
+ppz (Zipper r ct) = "ZIP\n" ++ indent (pp r:[ppctx ct])
 
 ppctx :: Context -> String
 ppctx TopC = "Top\n"
-ppctx (SeqC ct _ el er) = ppctx ct ++ "\nMATCHED\n" ++ indent (map pp el) ++ "\nREMAINING\n" ++ indent (map pp er) ++ "\n"
-ppctx (AltC ct) = indent [ppctx ct] ++ "\n"
-ppctx (StarC ct es e) = indent [ppctx ct] ++ "STAR\n" ++ indent (map pp es) ++ "\n"
-ppctx (RecdC ct e s es) = indent [ppctx ct] ++ "RECD\n" ++ s ++ indent (map pp es) ++ "\n"
+ppctx (SeqC ct _ el er) = "SEQC\n" ++ indent [ppctx ct]
+ppctx (AltC ct) = "ALTC\n" ++ indent [ppctx ct]
+ppctx (StarC ct es e) = "STARC\n" ++ indent [ppctx ct]
+ppctx (RecdC ct e s es) = "RECDC\n" ++ indent [ppctx ct]
