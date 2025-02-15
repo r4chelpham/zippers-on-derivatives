@@ -69,6 +69,11 @@ ders r (c:cs) = ders (der r c) cs
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
 
+stringToRexp :: [Char] -> Rexp
+stringToRexp [] = ONE
+stringToRexp [c] = CHAR c
+stringToRexp (c:cs) = SEQ (CHAR c) (stringToRexp cs)
+
 class ToRexp a where
   toRexp :: a -> Rexp
 
@@ -77,7 +82,7 @@ instance ToRexp Rexp where
   toRexp = id 
 
 instance ToRexp String where
-  toRexp = foldr (SEQ . CHAR) ONE  
+  toRexp = stringToRexp
 
 infixl 6 <~>
 infixl 5 <|>

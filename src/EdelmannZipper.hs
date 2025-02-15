@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# HLINT ignore "Use foldl" #-}
 module EdelmannZipper where
 
 import Rexp
@@ -12,16 +10,14 @@ focus :: Rexp -> Zipper
 focus r = Set.singleton [r]
 
 up :: Char -> Context -> Zipper
-up c ctx =
-    case ctx of
-        [] -> Set.empty
-        right:parent ->
-            if nullable right then
-                Set.union (down right c parent) (up c parent)
-            else
-                down right c parent
+up _ [] = Set.empty
+up c (right:parent)
+    | nullable right = Set.union (down right c parent) (up c parent)
+    | otherwise = down right c parent
 
 down :: Rexp -> Char -> Context -> Zipper
+down ZERO _ _ = Set.empty
+down ONE _ _ = Set.empty
 down (CHAR d) c ctx
     | c == d = Set.singleton ctx
     | otherwise = Set.empty
@@ -36,7 +32,7 @@ down (OPTIONAL r1) c ctx = down r1 c ctx
 down (RANGE cs) c ctx
     | Set.member c cs = Set.singleton ctx
     | otherwise = Set.empty
-down r@(PLUS r1) c ctx = down r1 c (r:ctx)
+down (PLUS r1) c ctx = down r1 c (STAR r1:ctx)
 down (NTIMES _ 0) _ _ = Set.empty
 down (NTIMES r1 n) c ctx = down r1 c (NTIMES r1 (n-1):ctx)
 down (RECD _ r1) c ctx = down r1 c ctx
@@ -53,4 +49,4 @@ matcher r s = any isNullable (Set.toList (EdelmannZipper.ders (focus r) s))
   where
     isNullable :: Context -> Bool
     isNullable [] = True
-    isNullable ctx = any nullable ctx
+    isNullable ctx = all nullable ctx
