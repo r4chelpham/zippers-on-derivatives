@@ -2,6 +2,8 @@ module EdelmannZipper where
 
 import Rexp
 import qualified Data.Set as Set
+import Data.Char (intToDigit)
+import Data.List (intercalate)
 
 type Context = [Rexp]
 type Zipper = Set.Set Context
@@ -44,9 +46,55 @@ ders :: Zipper -> [Char] -> Zipper
 ders z [] = z
 ders z (c:cs) = EdelmannZipper.ders (EdelmannZipper.der z c) cs
 
+isNullable :: Zipper -> Bool
+isNullable z = any nullableCtx (Set.toList z)
+    where
+    nullableCtx :: Context -> Bool
+    nullableCtx [] = True
+    nullableCtx ctx = all nullable ctx
+
 matcher :: Rexp -> [Char] -> Bool
-matcher r s = any isNullable (Set.toList (EdelmannZipper.ders (focus r) s))
-  where
-    isNullable :: Context -> Bool
-    isNullable [] = True
-    isNullable ctx = all nullable ctx
+matcher r s = isNullable (EdelmannZipper.ders (focus r) s)
+
+-- pretty-printing REGs
+implode :: [[Char]] -> [Char]
+implode = intercalate "\n"
+
+explode :: [Char] -> [[Char]]
+explode = lines
+
+lst :: [Char] -> [Char]
+lst s = case explode s of
+    []   -> ""
+    h:tl -> implode $ (" └" ++ h) : map ("  " ++) tl
+
+mid :: [Char] -> [Char]
+mid s = case explode s of
+    []   -> ""
+    h:tl -> implode $ (" ├" ++ h) : map (" │" ++) tl
+
+indent :: [[Char]] -> [Char]
+indent [] = ""
+indent ss = implode $ map mid (init ss) ++ [lst (last ss)]
+
+pps :: [Rexp] -> String
+pps es = indent (map pp es)
+
+pp :: Rexp -> String
+pp ZERO        = "0\n"
+pp ONE         = "1\n"
+pp (CHAR c)     = c : "\n"
+pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
+pp (SEQ r1 r2)  =  "SEQ\n" ++ pps [r1, r2]
+pp (ALT r1 r2) = "ALT\n" ++ pps [r1, r2]
+pp (STAR r)    = "STAR\n" ++ pps [r]
+pp (OPTIONAL r)    = "OPTIONAL\n" ++ pps [r]
+pp (PLUS r)    = "PLUS\n" ++ pps [r]
+pp (NTIMES r n)    = "NTIMES\n" ++ [intToDigit n] ++ "\n" ++ pps [r]
+pp (RECD s r)    = "RECD\n" ++ s ++ "\n" ++ pps [r]
+
+ppz :: Zipper -> String
+ppz z = "ZIP\n" ++ indent (map ppctx (Set.toList z))
+
+ppctx :: Context -> String
+ppctx ct = indent (map pp ct)

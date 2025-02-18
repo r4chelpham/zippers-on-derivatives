@@ -10,8 +10,7 @@ main = do
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
     print fileContent
-    let tokens = tokenise fileContent
-    print tokens
+    print (EdelmannZipper.ders (EdelmannZipper.focus whileRegs) fileContent)
 
 
 
