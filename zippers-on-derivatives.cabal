@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
+      ARexp
       EdelmannZipper
+      EdelmannZipperv2
       Lexer
       Rexp
       TreeZipper
@@ -67,7 +69,7 @@ test-suite zippers-on-derivatives-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      EdelmannZipperSpec
+      ARexpSpec
       LexerSpec
       RexpSpec
       ValSpec
