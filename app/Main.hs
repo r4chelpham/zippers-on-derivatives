@@ -10,7 +10,7 @@ main = do
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
     print fileContent
-    print (EdelmannZipper.ders (EdelmannZipper.focus whileRegs) fileContent)
+    -- print (EdelmannZipper.ders (EdelmannZipper.focus whileRegs) fileContent)
 
 
 
