@@ -70,6 +70,7 @@ test-suite zippers-on-derivatives-test
   main-is: Spec.hs
   other-modules:
       ARexpSpec
+      EdelmannZipperv2Spec
       LexerSpec
       RexpSpec
       ValSpec
