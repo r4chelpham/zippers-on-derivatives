@@ -92,7 +92,13 @@ infixl 3 <$>
 a <~> b = SEQ (toRexp a) (toRexp b)
 
 (<|>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
-a <|> b = ALT (toRexp a) (toRexp b)
+a <|> b = mergeAlts (toRexp a) (toRexp b)
+
+mergeAlts :: Rexp -> Rexp -> Rexp
+mergeAlts (ALT a1 a2) (ALT b1 b2) = ALT a1 (mergeAlts a2 (ALT b1 b2))  -- Merge both
+mergeAlts (ALT a1 a2) b = ALT a1 (mergeAlts a2 b)             -- Flatten left
+mergeAlts a (ALT b1 b2) = ALT a (ALT b1 b2)                   -- Flatten right
+mergeAlts a b = ALT a b  
 
 (<$>) :: String -> Rexp -> Rexp
 s <$> r = RECD s r
