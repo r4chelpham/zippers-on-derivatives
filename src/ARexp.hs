@@ -2,7 +2,6 @@
     Implementation of regular expressions annotated with bitcodes
 -}
 module ARexp where
-
 import Rexp
 import Val
 import qualified Data.Set as Set
@@ -145,6 +144,7 @@ code (Stars []) = [S]
 code (Stars (v:vs)) = Z:(code v ++ code (Stars vs))
 code (Opt v) = code v
 code (Pls (v:vs)) = Z:(code v ++ code (Pls vs))
+code (NX []) = [S]
 code (NX (v:vs)) = Z:(code v ++ code (NX vs))
 code (Rec _ v) = code v
 
