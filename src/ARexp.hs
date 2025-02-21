@@ -18,7 +18,21 @@ data ARexp = AZERO
             | AOPTIONAL ARexp [Bit] 
             | APLUS ARexp [Bit] 
             | ANTIMES ARexp Int [Bit] 
-            | ARECD String ARexp [Bit] deriving (Show, Eq, Ord)
+            | ARECD String ARexp [Bit] deriving (Show, Ord)
+
+instance Eq ARexp where
+    AZERO == AZERO = True
+    AONE _ == AONE _ = True
+    ACHAR c _ == ACHAR d _ = c == d
+    AALT a1s _ == AALT a2s _ = a1s == a2s
+    ASEQ a1 a2 _ == ASEQ a1' a2' _ = a1 == a1' && a2 == a2' 
+    ASTAR a _ == ASTAR a' _ = a == a'
+    ARANGE cs _ == ARANGE cs' _ = cs == cs'
+    AOPTIONAL a _ == AOPTIONAL a' _ = a == a'
+    APLUS a _ == APLUS a' _ = a == a'
+    ANTIMES a n _ == ANTIMES a' n' _ = n == n' && a == a'
+    ARECD s a _ == ARECD s' a' _ = s == s' && a == a'
+    _ == _ = False
 
 fuse :: [Bit] -> ARexp -> ARexp
 fuse _ AZERO = AZERO

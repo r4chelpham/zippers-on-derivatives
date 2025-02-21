@@ -45,6 +45,7 @@ library
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , ordered-containers >=0.2.4
   default-language: Haskell2010
 
 executable zippers-on-derivatives-exe
@@ -62,6 +63,7 @@ executable zippers-on-derivatives-exe
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , ordered-containers >=0.2.4
     , zippers-on-derivatives
   default-language: Haskell2010
 
@@ -86,5 +88,6 @@ test-suite zippers-on-derivatives-test
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , ordered-containers >=0.2.4
     , zippers-on-derivatives
   default-language: Haskell2010

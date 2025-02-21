@@ -33,7 +33,6 @@ instance Arbitrary Rexp where
                     , NTIMES Prelude.<$> arbitrary <*> choose (0, 100)
                     ]
 
-
 nullable :: Rexp -> Bool
 nullable ZERO = False
 nullable ONE = True

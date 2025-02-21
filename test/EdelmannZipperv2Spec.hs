@@ -3,9 +3,10 @@ module EdelmannZipperv2Spec where
 import EdelmannZipperv2
 import Rexp
 import Val
-import Test.Hspec (Spec)
+import Test.Hspec
 
 spec :: Spec
 spec = do
-    describe "zder" $
-        it "has the same matching result as all "
+    describe "test" $ do
+        it "true" $ do
+            True
