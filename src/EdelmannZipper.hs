@@ -1,12 +1,19 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module EdelmannZipper where
 
 import Rexp
 import qualified Data.Set as Set
+import Data.Function.Memoize
 import Data.Char (intToDigit)
-import Data.List (intercalate)
+import Data.List (intercalate, foldl')
 
 type Context = [Rexp]
 type Zipper = Set.Set Context
+
+instance Memoizable Zipper where
+  memoize f s = memoize (\cs -> f (Set.fromList cs)) (Set.toAscList s)
 
 focus :: Rexp -> Zipper
 focus r = Set.singleton [r]
@@ -47,7 +54,7 @@ ders z [] = z
 ders z (c:cs) = EdelmannZipper.ders (EdelmannZipper.der z c) cs
 
 isNullable :: Zipper -> Bool
-isNullable z = any nullableCtx (Set.toList z)
+isNullable = any nullableCtx
     where
     nullableCtx :: Context -> Bool
     nullableCtx [] = True
@@ -56,7 +63,69 @@ isNullable z = any nullableCtx (Set.toList z)
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = isNullable (EdelmannZipper.ders (focus r) s)
 
--- pretty-printing REGs
+type Action t = ActionContext t -> IO ()
+
+data ActionContext t = ActionContext {
+    emit :: t -> IO ()
+    , content :: String
+}
+    
+data Rule t = Rule {
+    r :: Rexp
+    , action :: Action t
+}
+
+data State = State {
+    transitions :: Char -> State
+    , isAccepting :: Bool
+}
+
+-- memoize :: Ord k => (k -> a) -> k -> a
+-- memoize f = let cache = memo f HM.empty
+--             in \k -> cache k
+
+-- memo :: Ord k => (k -> a) -> HashMap k a -> k -> a
+-- memo f table k = case HM.lookup k table of
+--     Just v  -> v
+--     Nothing -> let v = f k
+--                    table' = HM.insert k v table
+--                in v
+
+-- build' :: [Rule t] -> State Action t
+-- build' rules = getState [Set.fromList [r] | (Rule r _) <- rules]
+--   where
+--     getState = memoize $ \z -> 
+--             let getNext = memoize (\c -> getState (EdelmannZipper.der z c))
+--             in State getNext (isNullable z)
+    
+--     states :: HashMap [Zipper] (State t)
+--     states = HM.empty
+
+--     getState :: [Zipper] -> State t
+--     getState = memoize $ \zippers -> newState zippers states
+
+--     newState :: [Zipper] -> State t
+--     newState zippers = State {
+--         transitions = \c -> getState $ map (`derive` c) zippers,
+--         isAccepting = any isNullable zippers,
+--         value = listToMaybe 
+--             [ action
+--             | (zipper, Rule _ action) <- zip zippers rules
+--             , isNullable zipper
+--             ]
+--     }
+
+build :: Rexp -> State
+build r = getState (Set.fromList [[r]])
+    where
+        getState = memoize $ \z -> 
+            let getNext = memoize (\c -> getState (EdelmannZipper.der z c))
+            in State getNext (isNullable z)
+
+run :: State -> [Char] -> Bool
+run s cs = isAccepting (foldl' transitions s cs)
+
+-- pretty-printing Zippers
 implode :: [[Char]] -> [Char]
 implode = intercalate "\n"
 

@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Rexp where
 
+import Data.Function.Memoize
 import qualified Data.Set as Set
 import Test.QuickCheck
 
@@ -18,8 +20,13 @@ data Rexp = ZERO
             | RANGE (Set.Set Char)
             | PLUS Rexp
             | OPTIONAL Rexp
-            | NTIMES Rexp Int deriving (Show, Eq, Ord)
+            | NTIMES Rexp Int 
+            deriving (Show, Eq, Ord) 
 
+instance Memoizable (Set.Set Char) where
+  memoize f s = memoize (\cs -> f (Set.fromList cs)) (Set.toAscList s)
+
+deriveMemoizable ''Rexp
 -- We define an Arbitrary instance of Rexp for property testing purposes.
 instance Arbitrary Rexp where
   arbitrary = oneof [ return ZERO
