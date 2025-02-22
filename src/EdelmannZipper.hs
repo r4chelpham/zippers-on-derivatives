@@ -75,10 +75,13 @@ data Rule t = Rule {
     , action :: Action t
 }
 
-data State = State {
-    transitions :: Char -> State
-    , isAccepting :: Bool
+data State t = State {
+    next :: Char -> State t
+    , hasNext :: Bool
+    , value :: Maybe t
 }
+
+
 
 -- memoize :: Ord k => (k -> a) -> k -> a
 -- memoize f = let cache = memo f HM.empty
