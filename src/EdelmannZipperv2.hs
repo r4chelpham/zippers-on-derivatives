@@ -6,7 +6,7 @@ import Val
 import qualified Data.Set as Set
 import qualified Data.Set.Ordered as OSet
 import Data.Char (intToDigit)
-import Data.List (intercalate, minimumBy)
+import Data.List (intercalate, minimumBy, nub)
 import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import Data.Foldable(toList)
@@ -89,8 +89,18 @@ down (ANTIMES _ 0 _) _ _ = OSet.empty
 down (ANTIMES r1 n bs) c ctx = down (fuse (bs++[Z]) r1) c (ANTIMES r1 (n-1) []:ctx)
 down (ARECD _ r1 bs) c ctx = down (fuse bs r1) c ctx
 
+first :: ARexp -> Bool
+first a = Rexp.hasFirst (erase a)
+
+productive :: ARexp -> Bool
+productive a = isProductive (erase a)
+
+hasFirst :: Zipper -> Bool
+hasFirst z = any (\c -> any first c && all productive c) z
+
 zder :: Zipper -> Char -> Zipper
-zder z c = ounion (up c) (toList z)
+-- zder z c = ounion (up c) (toList z)
+zder z c = oall (filter EdelmannZipperv2.hasFirst (nub (map (up c) (toList z))))
 
 zders :: Zipper -> [Char] -> Zipper
 zders z [] = z

@@ -40,7 +40,7 @@ down (NTIMES r1 n) c ctx = down r1 c (NTIMES r1 (n-1):ctx)
 down (RECD _ r1) c ctx = down r1 c ctx
 
 der :: Zipper -> Char -> Zipper
-der z c = Set.unions $ Set.map (up c) z
+der z c = Set.unions $ Set.fromList (filter EdelmannZipper.hasFirst (map (up c) (Set.toList z)))
 
 ders :: Zipper -> [Char] -> Zipper
 ders z [] = z
@@ -52,6 +52,9 @@ isNullable z = any nullableCtx (Set.toList z)
     nullableCtx :: Context -> Bool
     nullableCtx [] = True
     nullableCtx ctx = all nullable ctx
+
+hasFirst :: Zipper -> Bool
+hasFirst z = any (\c -> any Rexp.hasFirst c && all isProductive c) z
 
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = isNullable (EdelmannZipper.ders (focus r) s)
