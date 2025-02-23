@@ -76,6 +76,20 @@ ders r (c:cs) = ders (der r c) cs
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
 
+hasFirst :: Rexp -> Bool
+hasFirst (CHAR _) = True
+hasFirst (ALT r1 r2) = hasFirst r1 || hasFirst r2
+hasFirst (SEQ r1 r2) = (hasFirst r1 && isProductive r2) || (nullable r1 && hasFirst r2)
+hasFirst (STAR r) = hasFirst r 
+hasFirst (PLUS r) = hasFirst r
+hasFirst (OPTIONAL r) = hasFirst r
+hasFirst (RANGE _) = True 
+hasFirst (NTIMES r n) = hasFirst r 
+hasFirst _ = False
+
+isProductive :: Rexp -> Bool
+isProductive r = nullable r || hasFirst r 
+
 stringToRexp :: [Char] -> Rexp
 stringToRexp [] = ONE
 stringToRexp [c] = CHAR c

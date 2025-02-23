@@ -1,7 +1,4 @@
-import qualified Rexp
-import qualified EdelmannZipper
-import Lexer
-import System.IO
+import qualified EdelmannZipper as Z
 
 main :: IO ()
 main = do
@@ -9,8 +6,9 @@ main = do
     filename <- getLine
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
-    print fileContent
-    print (EdelmannZipper.ders (EdelmannZipper.focus whileRegs) fileContent)
+    putStrLn fileContent
+    result <- Z.tokenise (Z.build Z.rules) fileContent
+    print result
 
 
 

@@ -160,7 +160,7 @@ data Token = T_KEYWORD String
             | T_PAREN String
             | T_SEMI
             | T_ID String
-            | T_NUM Integer deriving (Show)
+            | T_NUM String deriving (Show)
 
 token :: (String, String) -> Token
 token ("k", s) = T_KEYWORD s
@@ -169,7 +169,7 @@ token ("str", s) = T_STRING s
 token ("p", s) = T_PAREN s
 token ("s", _) = T_SEMI
 token ("i", s) = T_ID s
-token ("n", s) = T_NUM (read s :: Integer)
+token ("n", s) = T_NUM s
 
 
 whileRegs :: Rexp
