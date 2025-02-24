@@ -183,6 +183,7 @@ tokenise init input = do
     process input
     readIORef tokens
 
+{- Find the best (longest match and highest priority) action -}
 findBestAction :: State a -> [Char] -> Int -> Maybe (Action a) -> Int -> IO (Maybe (Action a), Int)
 findBestAction _ [] _ bestAction bestLen = return (bestAction, bestLen)
 findBestAction state (c:cs) currentLen bestAction bestLen
