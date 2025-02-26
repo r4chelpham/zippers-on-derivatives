@@ -29,6 +29,7 @@ library
       Lexer
       Rexp
       RexpZipper
+      RexpZipperv2
       Token
       TreeZipper
       Val

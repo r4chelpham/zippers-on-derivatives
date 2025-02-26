@@ -4,6 +4,7 @@
 module RexpZipper where
 import Test.QuickCheck
 import qualified Data.Set as Set
+import Data.List (intercalate)
 
 
 type Sym = Char
@@ -14,11 +15,12 @@ data Exp = ZERO
             | RANGE (Set.Set Char)
             | SEQ Sym [Exp]
             | ALT [Exp]
-            | STAR Exp [Exp]
-            -- | PLUS Exp [Exp]
-            -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
-            | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
-            | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
+            -- | STAR Exp [Exp]
+            -- -- | PLUS Exp [Exp]
+            -- -- | OPTIONAL Exp [Exp]  -- equivalent to 1 + STAR r - but i want to make it its own constructor to reduce the number of nodes in the tree
+            -- | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
+            -- | RECD [Char] Exp [Exp]
+            deriving (Ord, Eq, Show)
 
 {-
     Default constructors for Exps that remember how 
@@ -48,11 +50,12 @@ defaultRECD s e = RECD s e []
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Context -- Alternate has one context shared between its children
-            | StarC Context [Exp] Exp
+            -- | StarC Context [Exp] Exp
             -- | PlusC Context [Exp] Exp
             -- | OptionalC Context [Exp] Exp
-            | NTimesC Context Int [Exp] Exp Bool
-            | RecdC Context Exp [Char] [Exp] deriving (Ord, Eq, Show)
+            -- | NTimesC Context Int [Exp] Exp Bool
+            -- | RecdC Context Exp [Char] [Exp]
+            deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp Context deriving (Ord, Eq, Show)
 
@@ -76,12 +79,12 @@ nullable (CHAR _) = False
 nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
-nullable (STAR _ _) = True
+-- nullable (STAR _ _) = True
 -- nullable (PLUS e _) = nullable e
 -- nullable (OPTIONAL _ _) = True
-nullable (NTIMES 0 _ _ _) = True
-nullable (NTIMES _ r _ _) = nullable r
-nullable (RECD _ r _) = nullable r
+-- nullable (NTIMES 0 _ _ _) = True
+-- nullable (NTIMES _ r _ _) = nullable r
+-- nullable (RECD _ r _) = nullable r
 
 {-
     Creates a zipper that focuses on 
@@ -120,16 +123,13 @@ der c (Zipper re ctx) = up re ctx
         | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
-    down ct (SEQ s (e:es)) =
-        if nullable e then
-        down (SeqC ct s [] es) e ++ up (SEQ s es) (SeqC ct s [] es)
-        else down (SeqC ct s [] es) e
+    down ct (SEQ s (e:es)) = down (SeqC ct s [] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct r@(STAR e es) =
-        let zs = down (StarC ct es e) e in
-            if null zs then
-                 up r ct
-            else zs
+    -- down ct r@(STAR e es) =
+    --     let zs = down (StarC ct es e) e in
+    --         if null zs then
+    --              up r ct
+    --         else zs
     -- down ct (OPTIONAL e es) =
     --     if not (null es) then [] else
     --     let zs = down (OptionalC ct es e) e in
@@ -141,35 +141,35 @@ der c (Zipper re ctx) = up re ctx
     --         if null zs then
     --             if null es then [] else up r ct
     --         else zs
-    down ct r@(NTIMES 0 _ _ _) = up r ct
-    down ct r@(NTIMES n e es nu) =
-        let ctt = NTimesC ct (n-1) es e nu
-            zs = down ctt e in
-            if nu then zs ++ up ONE ctt else
-            if null zs then
-                up r ct
-            else zs
-    down ct (RECD s r' es) = down (RecdC ct r' s es) r'
+    -- down ct r@(NTIMES 0 _ _ _) = up r ct
+    -- down ct r@(NTIMES n e es nu) =
+    --     let ctt = NTimesC ct (n-1) es e nu
+    --         zs = down ctt e in
+    --         if nu then zs ++ up ONE ctt else
+    --         if null zs then
+    --             up r ct
+    --         else zs
+    -- down ct (RECD s r' es) = down (RecdC ct r' s es) r'
 
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
     up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
     up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
-    up e (StarC ct es r) =
-        let zs = down (StarC ct (e:es) r) r in
-            if null zs then
-                up (STAR r (reverse (e:es))) ct
-            else zs
+    -- up e (StarC ct es r) =
+    --     let zs = down (StarC ct (e:es) r) r in
+    --         if null zs then
+    --             up (STAR r (reverse (e:es))) ct
+    --         else zs
     -- up e (OptionalC ct es r) = up (OPTIONAL r (reverse(e:es))) ct
     -- up e (PlusC ct es r) =
     --     let zs = down (PlusC ct (e:es) r) r in
     --         if null zs then
     --             up (PLUS r (reverse (e:es))) ct
     --         else zs
-    up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
-    up e (NTimesC ctt n es r nu) = down (NTimesC ctt (n-1) (e:es) r nu) r
-    up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
+    -- up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
+    -- up e (NTimesC ctt n es r nu) = down (NTimesC ctt (n-1) (e:es) r nu) r
+    -- up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
 
 {-
     Derives an Exp from a String (List of characters)
@@ -200,14 +200,14 @@ matcher s r =
 -}
 isNullable :: Context -> Bool
 isNullable TopC = False
-isNullable (NTimesC ct n _ _ _) = n == 0 && isNullable ct
+-- isNullable (NTimesC ct n _ _ _) = n == 0 && isNullable ct
 isNullable (AltC ct) = isNullable ct
 isNullable (SeqC TopC _ _ _) = True
 isNullable (SeqC ct _ _ es) = null es && isNullable ct
-isNullable (StarC ct _ _) = isNullable ct
+-- isNullable (StarC ct _ _) = isNullable ct
 -- isNullable (OptionalC ct _ _) = isNullable ct
 -- isNullable (PlusC ct es _) = not (null es) && isNullable ct
-isNullable (RecdC ct _ _ _) = isNullable ct
+-- isNullable (RecdC ct _ _ _) = isNullable ct
 
 {-
     Returns the lexed result from taking successive 
@@ -217,7 +217,7 @@ isNullable (RecdC ct _ _ _) = isNullable ct
 -}
 lexing :: [Char] -> Exp -> Exp
 lexing cs e =
-    let Zipper re ctx = head (ders cs [focus e]) in
+    let Zipper re ctx = last (ders cs [focus e]) in
         if isNullable ctx && nullable re then
             let (Zipper r' _) = plug re ctx in
                 r'
@@ -321,3 +321,47 @@ r ?> _ = defaultOPTIONAL (toExp r)
 
 (^>) :: ToExp a => a -> Int -> Exp
 r ^> n = defaultNTIMES n (toExp r)
+
+-- pretty-printing REGs
+implode :: [[Char]] -> [Char]
+implode = intercalate "\n"
+
+explode :: [Char] -> [[Char]]
+explode = lines
+
+lst :: [Char] -> [Char]
+lst s = case explode s of
+    []   -> ""
+    h:tl -> implode $ (" └" ++ h) : map ("  " ++) tl
+
+mid :: [Char] -> [Char]
+mid s = case explode s of
+    []   -> ""
+    h:tl -> implode $ (" ├" ++ h) : map (" │" ++) tl
+
+indent :: [[Char]] -> [Char]
+indent [] = ""
+indent ss = implode $ map mid (init ss) ++ [lst (last ss)]
+
+pps :: [Exp] -> String
+pps es = indent (map pp es)
+
+pp :: Exp -> String
+pp ZERO        = "0\n"
+pp ONE         = "1\n"
+pp (CHAR c)     = c : "\n"
+pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
+pp (SEQ s es)  =  (if null es then [s] else "SEQ\n" ++ pps es) ++ "\n"
+pp (ALT es) = "ALT\n" ++ pps es
+pp (STAR e es)    = "STAR\n" ++ (if null es then pp e else pps es)
+pp (RECD s e es)    = "RECD\n" ++ s ++ "\n" ++ (if null es then pp e else pps es)
+
+ppz :: Zipper -> String
+ppz (Zipper r ct) = "ZIP\n" ++ indent (pp r:[ppctx ct])
+
+ppctx :: Context -> String
+ppctx TopC = "Top\n"
+ppctx (SeqC ct _ el er) = "SEQC\n" ++ indent [ppctx ct]
+ppctx (AltC ct) = "ALTC\n" ++ indent [ppctx ct]
+ppctx (StarC ct es e) = "STARC\n" ++ indent [ppctx ct]
+ppctx (RecdC ct e s es) = "RECDC\n" ++ indent [ppctx ct]
