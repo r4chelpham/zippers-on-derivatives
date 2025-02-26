@@ -29,17 +29,22 @@ data Zipper = Zipper Exp Mem deriving (Ord, Eq, Show)
 
 data Mem = Mem
   { parents :: IORef [Context]
-  , result :: Maybe Exp
+  , result :: IORef (M.Map Int Exp)
   }
 
 instance Eq Mem where
   (Mem _ r1) == (Mem _ r2) = r1 == r2
 
 instance Ord Mem where
-  compare = comparing result
+  compare = comparing (unsafePerformIO . readIORef . result)
 
 instance Show Mem where
-  show (Mem ps r) = "Mem { parents = " ++ show (unsafePerformIO (readIORef ps)) ++ "\nresult = " ++ show r ++ "}"
+  show (Mem ps r) =
+    "Mem { parents = " ++ 
+    show (unsafePerformIO (readIORef ps)) ++ 
+    "\nresult = " ++ 
+    show (unsafePerformIO (readIORef r)) ++ 
+    "}"
 
 type Mems = M.Map (Int, Exp) Mem
 
@@ -63,7 +68,7 @@ lookupMemsSafe key defaultMemIO = do
 defaultMem :: Mem
 defaultMem = Mem
   { parents = unsafePerformIO (newIORef [TopC])
-  , result = Nothing
+  , result = unsafePerformIO (newIORef M.empty)
   }
 
 focus :: Exp -> Zipper
@@ -96,8 +101,9 @@ der pos c (Zipper re mem) = up re mem
       let key = (pos, e)
       case M.lookup key globalMems of
         Just m -> do
-          _ <- modifyIORef' (parents m) (ct:)
-          case result m of
+          _ <- modifyIORef' (parents m) (++ [ct])
+          results <- readIORef (result m)
+          case M.lookup pos results of
             Just e' -> up' e' ct
             Nothing -> return []
         Nothing -> do
@@ -126,8 +132,8 @@ der pos c (Zipper re mem) = up re mem
 
     up :: Exp -> Mem -> IO [Zipper]
     up e m = do
+      _ <- modifyIORef' (result m) (M.insert pos e )
       ps <- readIORef (parents m)
-      let updatedMem = m { result = Just e }
       parentResults <- mapM (up' e) ps
       return $ concat parentResults
 
@@ -135,12 +141,11 @@ der pos c (Zipper re mem) = up re mem
     up' _ TopC = return []
     up' e (SeqC m s es []) = up (SEQ s (reverse (e:es))) m
     up' e (SeqC m s el (er:esr)) = down (SeqC m s (e:el) esr) er
-    up' e (AltC m) = 
-      case result m of 
+    up' e (AltC m) = do
+      results <- readIORef (result m)
+      case M.lookup pos results of 
         Just (ALT es) -> do
-          let key = (pos, e)
-          let newMem = m { result = Just (ALT (es ++ [e])) }
-          modifyIORef' mems (M.insert key newMem)
+          _ <- modifyIORef' (result m) (M.insert pos (ALT (es ++ [e])))
           return []
         _ -> do
           up (ALT [e]) m
