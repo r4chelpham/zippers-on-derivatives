@@ -32,14 +32,18 @@ data Exp' = ZERO
             | CHAR Char
             | SEQ Sym [Exp]
             | ALT [Exp]
+            | STAR Exp
             deriving (Ord, Eq, Show)
 
 data Context = TopC
             | SeqC Mem Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Mem -- Alternate has one context shared between its children
+            | StarC Mem [Exp] Exp'
             deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp' Mem deriving (Ord, Show)
+
+
 
 instance Eq Zipper where
   (Zipper e m) == (Zipper e' m') =
@@ -76,8 +80,8 @@ instance Show Mem where
     "}"
 
 {- 
-  returns a different exp each time, 
-  but changes are being made to that one exp each time 
+  TODO: fix so that it creates Exps within the Exp'
+  (e.g. SEQ, ALT)
 -}
 createExp :: Exp' -> IO Exp
 createExp e' = do
@@ -115,10 +119,27 @@ eBottom = fst <$> defaults
 mBottom :: IO Mem
 mBottom = snd <$> defaults
 
--- | null character to indicate the end of a string and to go back up
+{-
+  Null character to signal the end of a lex/match.
+-}
 eof :: Char
 eof = '\0'
 
+{-
+  A function that finds the final matched value from the
+  resultant lex/match.
+-}
+unwrapTopZipper :: Zipper -> IO Exp
+unwrapTopZipper (Zipper _ m) = do
+  ps <- readIORef (parents m)
+  case ps of
+    [SeqC m' '\0' (e:_) []] -> do
+        ps' <- readIORef (parents m')
+        if ps' == [TopC] then return e
+        else error "Top zipper is invalid"
+    _ -> error "Top zipper is invalid"
+
+{- TODO: fix this to clone the entire exp -}
 cloneExp :: Exp -> IO Exp
 cloneExp original = do
 
@@ -155,8 +176,9 @@ nullable (CHAR _) = False
 nullable (ALT es) =
   any (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
 nullable (SEQ _ []) = True
-nullable (SEQ _ es) = 
+nullable (SEQ _ es) =
   all (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
+nullable (STAR (Exp _ e')) =  nullable (unsafePerformIO (readIORef e')) 
 
 -- isNullable :: Context -> Bool
 -- isNullable TopC = False
@@ -205,7 +227,15 @@ der pos c (Zipper re me) = up re me
         zs <- down (AltC m) e
         return (acc ++ zs)
         ) [] es
-
+    down' m (STAR e) = do
+      mBott <- mBottom
+      e' <- readIORef (exp' e)
+      let m' = mBott {
+        start = start m
+      }
+      writeIORef (parents m') [StarC m [] e']
+      down (StarC m [] e') e
+    
     up :: Exp' -> Mem -> IO [Zipper]
     up e' m = do
       e <- eBottom
@@ -216,8 +246,7 @@ der pos c (Zipper re me) = up re me
       writeIORef (mem e) newMem
       writeIORef (result m) e
       ps <- readIORef (parents m)
-      parentResults <- mapM (up' e) ps
-      return $ concat parentResults
+      concatMapM (up' e) ps
 
     up' :: Exp -> Context -> IO [Zipper]
     up' _ TopC = return []
@@ -234,6 +263,17 @@ der pos c (Zipper re me) = up re me
           _ -> error "Not an ALT "
       else do
         up (ALT [e]) m
+    up' e (StarC m es e') = do
+      let ct = StarC m (e:es) e'
+      eBott <- eBottom
+      eRef <- newIORef e'
+      let e'' = eBott {
+        exp' = eRef
+      }
+      zs <- down ct e''
+      if null zs then do
+        up (SEQ '\0' (e:es)) m 
+      else return zs
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat <$> mapM f xs
@@ -245,17 +285,19 @@ ders pos (c:cs) zs = do
     newZs <- concatMapM (der pos c) zs
     ders (pos + 1) cs newZs
 
-run :: [Char] -> Exp -> IO [Zipper]
+
+run :: [Char] -> Exp -> IO [Exp]
 run s e = do
   z <- focus e
-  ders 0 s [z]
+  zs <- ders 0 s [z]
+  mapM unwrapTopZipper zs
 
--- matcher :: [Char] -> Exp -> IO Bool
--- matcher [] r = return $ nullable r
--- matcher s r = do
---     let initialZipper = focus r
---     zs <- ders 0 s [initialZipper]
---     return $ not (Prelude.null zs) && any (\(Zipper _ ct) -> isNullable ct) zs
+{-
+  Takes a list of Exp derived from the `run` function
+  and returns whether the operation was successful or not.
+-}
+matcher :: [Exp] -> Bool
+matcher es = not (null es)
 
 -- plug :: Exp -> Context -> Zipper
 -- plug e (SeqC TopC _ _ _) = Zipper e TopC
@@ -263,7 +305,7 @@ run s e = do
 -- plug e (AltC ct) = plug e ct
 -- plug _ _ = error "could not plug"
 
--- pretty-printing REGs
+-- pretty-printing (ish) Zippers
 implode :: [[Char]] -> [Char]
 implode = intercalate "\n"
 
@@ -288,8 +330,8 @@ pps :: [Exp] -> String
 pps es = indent (map ppe es)
 
 ppe :: Exp -> String
-ppe (Exp _ e') = 
-  "EXP\n" ++ 
+ppe (Exp _ e') =
+  "EXP\n" ++
   indent ("Mem: { ... }" : [ppe' (unsafePerformIO (readIORef e'))])
 
 ppe' :: Exp' -> String
@@ -314,5 +356,5 @@ ppm (Mem st en ps res) =
 
 ppctx :: Context -> String
 ppctx TopC = "TOP\n"
-ppctx (SeqC m _ el er) = "SEQC\n" ++ indent [ppm m] 
+ppctx (SeqC m _ _ _) = "SEQC\n" ++ indent [ppm m]
 ppctx (AltC m) = "ALTC\n" ++ indent [ppm m]
