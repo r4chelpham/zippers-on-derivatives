@@ -1,6 +1,5 @@
 module RexpZipperv2Spec where
 
-import Test.QuickCheck
 import Test.Hspec
 import qualified RexpZipperv2 as Z
 
@@ -61,6 +60,30 @@ spec = do
             e <- Z.createExp (Z.SEQ '\0' [e1, e2])
             es <- Z.run "" e
             Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a nullable Exp (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a nullable Exp (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "ab" e
+            Z.matcher es `shouldBe` True
+        
+        it "matches a SEQ containing a nullable Exp (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
 
         it "matches an ALT to either of its characters (1)" $ do
             a <- Z.createExp (Z.CHAR 'a')
@@ -202,4 +225,201 @@ spec = do
             se <- Z.createExp (Z.SEQ '\0' [a,b])
             e <- Z.createExp (Z.STAR se)
             es <- Z.run "c" e
+            Z.matcher es `shouldBe` False
+
+        -- | TODO: try to write a property for this instead
+        it "matches a PLUS to 1 or more repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.PLUS a)
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a PLUS to 1 or more repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.PLUS a)
+            es <- Z.run "aaaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a PLUS to 1 or more repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.PLUS a)
+            es <- Z.run "aaaaaaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a PLUS to 1 or more repetitions of itself (does not match the empty string) (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.PLUS a)
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        -- | Equivalences: (r*)+ == r*
+        it "matches an PLUS of a STAR to 0 or more repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an PLUS of a STAR to 0 or more repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an PLUS of a STAR to 0 or more repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "aaaaaa" e
+            Z.matcher es `shouldBe` True
+
+        -- | Equivalences: (r?)+ == r*
+        it "matches an PLUS of a OPTIONAL to 0 or more repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an PLUS of a OPTIONAL to 0 or more repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an PLUS of a OPTIONAL to 0 or more repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.PLUS e')
+            es <- Z.run "aaaaaa" e
+            Z.matcher es `shouldBe` True
+
+        -- | TODO: try to write a property for this instead
+        it "matches an OPTIONAL to the empty string" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.OPTIONAL a)
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an OPTIONAL to itself" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.OPTIONAL a)
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+        
+        it "does not match an OPTIONAL to more than 1 repetition of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.OPTIONAL a)
+            es <- Z.run "aa" e
+            Z.matcher es `shouldBe` False
+
+        it "does not match an OPTIONAL to more than 1 repetition of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.OPTIONAL a)
+            es <- Z.run "aaa" e
+            Z.matcher es `shouldBe` False
+
+        it "does not match an OPTIONAL to more than 1 repetition of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.OPTIONAL a)
+            es <- Z.run "aaaaaaaaaaaa" e
+            Z.matcher es `shouldBe` False
+
+        -- | Equivalences: (r*)? == r*
+        it "matches an OPTIONAL of a STAR to 0 or more repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an OPTIONAL of a STAR to 0 or more repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an OPTIONAL of a STAR to 0 or more repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "aaaaa" e
+            Z.matcher es `shouldBe` True
+
+        -- | Equivalences: (r+)? == r*
+        it "matches an OPTIONAL of a PLUS to 0 or more repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an OPTIONAL of a PLUS to 0 or more repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an OPTIONAL of a PLUS to 0 or more repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.OPTIONAL e')
+            es <- Z.run "aaaaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an NTIMES to exactly n repetitions of itself (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.NTIMES 3 a)
+            es <- Z.run "aaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches an NTIMES to exactly n repetitions of itself (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.NTIMES 3 a)
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        it "matches an NTIMES to exactly n repetitions of itself (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.NTIMES 3 a)
+            es <- Z.run "aaaa" e
+            Z.matcher es `shouldBe` False
+
+        it "matches an NTIMES to exactly n repetitions of itself (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.NTIMES 3 a)
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` False
+
+        -- | Equivalences: (r?)^n == (r)^{..n}
+        it "matches nullable NTIMES (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.NTIMES 3 e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches nullable NTIMES (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.NTIMES 3 e')
+            es <- Z.run "aa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches nullable NTIMES (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.NTIMES 3 e')
+            es <- Z.run "aaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches nullable NTIMES (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.OPTIONAL a)
+            e <- Z.createExp (Z.NTIMES 3 e')
+            es <- Z.run "aaaa" e
             Z.matcher es `shouldBe` False

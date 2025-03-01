@@ -33,17 +33,21 @@ data Exp' = ZERO
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp
+            | PLUS Exp
+            | OPTIONAL Exp
+            | NTIMES Int Exp
             deriving (Ord, Eq, Show)
 
 data Context = TopC
             | SeqC Mem Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Mem -- Alternate has one context shared between its children
             | StarC Mem [Exp] Exp'
+            | PlusC Mem [Exp] Exp'
+            | OptionalC Mem [Exp]
+            | NTimesC Mem Int [Exp] Exp'
             deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp' Mem deriving (Ord, Show)
-
-
 
 instance Eq Zipper where
   (Zipper e m) == (Zipper e' m') =
@@ -139,22 +143,6 @@ unwrapTopZipper (Zipper _ m) = do
         else error "Top zipper is invalid"
     _ -> error "Top zipper is invalid"
 
-{- TODO: fix this to clone the entire exp -}
-cloneExp :: Exp -> IO Exp
-cloneExp original = do
-
-    originalMem <- readIORef (mem original)
-
-    originalExp' <- readIORef (exp' original)
-    -- when checking originalExp', you need to clone the inside of the exps as well
-
-    newMemRef <- newIORef originalMem
-    newExp'Ref <- newIORef originalExp'
-
-    return Exp
-      { mem = newMemRef
-      , exp' = newExp'Ref
-      }
 
 {- the zippers created are not the same but the references to e are? -}
 focus :: Exp -> IO Zipper
@@ -179,12 +167,22 @@ nullable (SEQ _ []) = True
 nullable (SEQ _ es) =
   all (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
 nullable (STAR _) =  True
+nullable (PLUS (Exp _ e')) = nullable (unsafePerformIO (readIORef e')) 
+nullable (OPTIONAL _) = True
+nullable (NTIMES 0 _) = True
+nullable (NTIMES _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 
--- isNullable :: Context -> Bool
--- isNullable TopC = False
--- isNullable (AltC ct) = isNullable ct
--- isNullable (SeqC TopC _ _ _) = True
--- isNullable (SeqC ct _ _ es) = Prelude.null es && isNullable ct
+{- | Mainly used for when we need to pass down a new reference to 
+an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
+-}
+newExp :: Exp' -> IO Exp
+newExp e = do 
+  eBott <- eBottom
+  eRef <- newIORef e
+  let e'' = eBott {
+    exp' = eRef
+  }
+  return e''
 
 der ::  Int -> Char -> Zipper -> IO [Zipper]
 der pos c (Zipper re me) = up re me
@@ -220,8 +218,20 @@ der pos c (Zipper re me) = up re me
       let m' = mBott {
         start = start m
       }
-      writeIORef (parents m') [AltC m]
-      down (SeqC m' s [] es) e
+      e' <- readIORef (exp' e)
+      if nullable e' then do
+        case es of
+          [] -> do
+            writeIORef (parents m') [AltC m]
+            down (SeqC m' s [] es) e
+          (el:esr) -> do
+            writeIORef (parents m') [AltC m]
+            z1 <- down (SeqC m' s [] es) e -- | Parse as normal...
+            z2 <- down (SeqC m' s [] esr) el -- | Parse as if the first part matched the empty string...
+            return (z1 ++ z2)
+      else do
+        writeIORef (parents m') [AltC m]
+        down (SeqC m' s [] es) e
     down' m (ALT es) =
       foldM (\acc e -> do
         zs <- down (AltC m) e
@@ -233,9 +243,30 @@ der pos c (Zipper re me) = up re me
       let m' = mBott {
         start = start m
       }
-      writeIORef (parents m') [StarC m [] e']
-      down (StarC m [] e') e
-    
+      let ct = StarC m [] e'
+      writeIORef (parents m') [ct]
+      down ct e
+    down' m (PLUS e) = do
+      mBott <- mBottom
+      e' <- readIORef (exp' e)
+      let m' = mBott {
+        start = start m 
+      }
+      let ct = PlusC m [] e'
+      writeIORef (parents m') [ct]
+      down ct e
+    down' m (OPTIONAL e) = down (OptionalC m []) e
+    down' _ (NTIMES 0 _) = return [] 
+    down' m (NTIMES n e) = do
+      mBott <- mBottom
+      e' <- readIORef (exp' e)
+      let m' = mBott {
+        start = start m
+      }
+      let ct = NTimesC m (n-1) [] e'
+      writeIORef (parents m') [ct]
+      down ct e
+
     up :: Exp' -> Mem -> IO [Zipper]
     up e' m = do
       e <- eBottom
@@ -265,14 +296,28 @@ der pos c (Zipper re me) = up re me
         up (ALT [e]) m
     up' e (StarC m es e') = do
       let ct = StarC m (e:es) e'
-      eBott <- eBottom
-      eRef <- newIORef e'
-      let e'' = eBott {
-        exp' = eRef
-      }
+      e'' <- newExp e'
       zs <- down ct e''
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m 
+      else return zs
+    up' e (PlusC m es e') = do
+      let ct = PlusC m (e:es) e'
+      e'' <- newExp e'
+      zs <- down ct e''
+      if null zs then do
+        up (SEQ '\0' (reverse (e:es))) m
+      else return zs
+    up' e (OptionalC m es) = up (SEQ '\0' (reverse (e:es))) m
+    -- ^ up' on this case is called on a successful first-time match.
+    up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
+    up' e (NTimesC m n es e') = do
+      let ct = NTimesC m (n-1) (e:es) e'
+      e'' <- newExp e'
+      zs <- down ct e''
+      if null zs && nullable e' then do
+          emptyStr <- createExp (SEQ '\0' [])
+          down ct emptyStr 
       else return zs
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
