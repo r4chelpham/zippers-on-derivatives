@@ -178,7 +178,7 @@ nullable (ALT es) =
 nullable (SEQ _ []) = True
 nullable (SEQ _ es) =
   all (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
-nullable (STAR (Exp _ e')) =  nullable (unsafePerformIO (readIORef e')) 
+nullable (STAR _) =  True
 
 -- isNullable :: Context -> Bool
 -- isNullable TopC = False
@@ -272,7 +272,7 @@ der pos c (Zipper re me) = up re me
       }
       zs <- down ct e''
       if null zs then do
-        up (SEQ '\0' (e:es)) m 
+        up (SEQ '\0' (reverse (e:es))) m 
       else return zs
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
@@ -285,8 +285,18 @@ ders pos (c:cs) zs = do
     newZs <- concatMapM (der pos c) zs
     ders (pos + 1) cs newZs
 
-
 run :: [Char] -> Exp -> IO [Exp]
+run [] e = do
+  e' <- readIORef (exp' e)
+  if nullable e' then do
+    z@(Zipper _ m) <- focus e
+    ps <- readIORef (parents m)
+    let (SeqC m' s _ _) = head ps -- ps will never be empty on a newly focused zipper
+    writeIORef (exp' e) (SEQ '\0' [])
+    writeIORef (parents m) [SeqC m' s [e] []]
+    res <- unwrapTopZipper z
+    return [res]
+  else return []
 run s e = do
   z <- focus e
   zs <- ders 0 s [z]
