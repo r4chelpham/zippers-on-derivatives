@@ -2,6 +2,7 @@ module RexpZipperv2Spec where
 
 import Test.Hspec
 import qualified RexpZipperv2 as Z
+import GHC.IORef
 
 {- | Due to the mutable nature of the final matching algorithm,
 we need to create instances of each Exp every time to test.
@@ -61,7 +62,79 @@ spec = do
             es <- Z.run "" e
             Z.matcher es `shouldBe` True
 
-        it "matches a SEQ containing a nullable Exp (1)" $ do
+        it "matches a SEQ containing a STAR (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a STAR (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "ab" e
+            Z.matcher es `shouldBe` True
+        
+        it "matches a SEQ containing a STAR (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a SEQ containing a STAR (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "aaaaab" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a PLUS (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a SEQ containing a PLUS (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "ab" e
+            Z.matcher es `shouldBe` True
+        
+        it "matches a SEQ containing a PLUS (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a SEQ containing a PLUS (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "aaaab" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a PLUS (5)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.PLUS a)
+            e <- Z.createExp (Z.SEQ '\0' [e1,b])
+            es <- Z.run "aaaaa" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a SEQ containing a OPTIONAL (1)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.OPTIONAL a)
@@ -69,7 +142,7 @@ spec = do
             es <- Z.run "b" e
             Z.matcher es `shouldBe` True
 
-        it "matches a SEQ containing a nullable Exp (2)" $ do
+        it "matches a SEQ containing a OPTIONAL (2)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.OPTIONAL a)
@@ -77,7 +150,7 @@ spec = do
             es <- Z.run "ab" e
             Z.matcher es `shouldBe` True
         
-        it "matches a SEQ containing a nullable Exp (3)" $ do
+        it "matches a SEQ containing a OPTIONAL (3)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.OPTIONAL a)
@@ -423,3 +496,160 @@ spec = do
             e <- Z.createExp (Z.NTIMES 3 e')
             es <- Z.run "aaaa" e
             Z.matcher es `shouldBe` False
+
+        -- | TODO: create property based tests for this instead
+        it "matches a RECD just like it would match a regular CHAR (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.RECD "s" a)
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular CHAR (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.RECD "s" a)
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a RECD just like it would match a regular SEQ (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.SEQ '\0' [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "ab" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular SEQ (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.SEQ '\0' [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a RECD just like it would match a regular SEQ (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.SEQ '\0' [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a RECD just like it would match a regular ALT (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.ALT [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular ALT (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.ALT [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular ALT (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e' <- Z.createExp (Z.ALT [a,b])
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "ab" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a RECD just like it would match a regular STAR (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular STAR (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "aaaaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular STAR (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a RECD just like it would match a regular PLUS (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular PLUS (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "aaaaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a RECD just like it would match a regular PLUS (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` False
+
+        it "flattens sequences accordingly" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.STAR a)
+            es <- Z.run "aaaaa" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.flatten e'
+            res  `shouldBe` "aaaaa"
+
+        it "flattens alternates accordingly" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.ALT [a,b])
+            e <- Z.createExp (Z.STAR e1)
+            es <- Z.run "abba" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.flatten e'
+            res `shouldBe` "abba"
+
+        it "flattens records accordingly" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "aaaaa" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.flatten e'
+            res `shouldBe` "aaaaa"
+
+        it "only tokenises on records (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e' <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.RECD "s" e')
+            es <- Z.run "aaaaa" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.env e'
+            res `shouldBe` [("s", "aaaaa")]
+        
+        it "only tokenises on records (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            e <- Z.createExp (Z.STAR a)
+            es <- Z.run "aaaaa" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.env e'
+            res  `shouldBe` []
+
+        it "only tokenises on records (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.ALT [a,b])
+            e <- Z.createExp (Z.STAR e1)
+            es <- Z.run "abba" e
+            e' <- readIORef (Z.exp' (head es))
+            res <- Z.env e'
+            res  `shouldBe` []

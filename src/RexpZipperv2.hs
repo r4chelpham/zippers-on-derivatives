@@ -3,7 +3,7 @@ module RexpZipperv2 where
 import GHC.IORef
 import System.IO.Unsafe (unsafePerformIO)
 import Data.IORef
-import Control.Monad (foldM)
+import Control.Monad (foldM, (>=>))
 import Data.Ord (comparing)
 import Data.List (intercalate)
 
@@ -27,15 +27,17 @@ instance Eq Exp where
   (Exp m1 e1') == (Exp m2 e2') =
     m1 == m2 && e1' == e2'
 
-data Exp' = ZERO
-            | ONE
-            | CHAR Char
+{-| ZERO and ONE are not needed in the algorithm because they
+  are represented as ALT [] and SEQ [] respectively.
+-}
+data Exp' = CHAR Char
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp
             | PLUS Exp
             | OPTIONAL Exp
             | NTIMES Int Exp
+            | RECD [Char] Exp
             deriving (Ord, Eq, Show)
 
 data Context = TopC
@@ -45,6 +47,7 @@ data Context = TopC
             | PlusC Mem [Exp] Exp'
             | OptionalC Mem [Exp]
             | NTimesC Mem Int [Exp] Exp'
+            | RecdC Mem [Char]
             deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp' Mem deriving (Ord, Show)
@@ -83,9 +86,8 @@ instance Show Mem where
     show (unsafePerformIO (readIORef res)) ++
     "}"
 
-{- 
-  TODO: fix so that it creates Exps within the Exp'
-  (e.g. SEQ, ALT)
+{-| Creates an Exp (an Exp' with an associated memory)
+  from a given Exp'.
 -}
 createExp :: Exp' -> IO Exp
 createExp e' = do
@@ -98,6 +100,12 @@ createExp e' = do
       , exp' = eRef
     }
 
+{-| Creates the default Expression and Memory to be
+  used in the zipper operations.
+
+  Equivalent to E⊥ and M⊥ in the Darragh and Adams paper
+  respectively.
+-}
 defaults :: IO (Exp, Mem)
 defaults = do
   mRef <- newIORef undefined
@@ -117,20 +125,26 @@ defaults = do
   writeIORef mRef m
   return (e, m)
 
+{-| Retrieve the default Exp.
+
+  Equivalent to E⊥ in the Darragh and Adams paper.
+-}
 eBottom :: IO Exp
 eBottom = fst <$> defaults
 
+{-| Retrieve the default Memory.
+
+  Equivalent to M⊥ in the Darragh and Adams paper.
+-}
 mBottom :: IO Mem
 mBottom = snd <$> defaults
 
-{-
-  Null character to signal the end of a lex/match.
+{-| Null character to signal the end of a lex/match.
 -}
 eof :: Char
 eof = '\0'
 
-{-
-  A function that finds the final matched value from the
+{-| A function that finds the final matched value from the
   resultant lex/match.
 -}
 unwrapTopZipper :: Zipper -> IO Exp
@@ -143,8 +157,9 @@ unwrapTopZipper (Zipper _ m) = do
         else error "Top zipper is invalid"
     _ -> error "Top zipper is invalid"
 
-
-{- the zippers created are not the same but the references to e are? -}
+{-| Creates a zipper that focuses on the given
+  expression.
+-}
 focus :: Exp -> IO Zipper
 focus e = do
     mTop <- mBottom
@@ -157,9 +172,10 @@ focus e = do
     writeIORef (parents mSeq) [root]
     return (Zipper e' mSeq)
 
+{-| Determines whether the expression given is able
+  to match the empty string or not.
+-}
 nullable :: Exp' -> Bool
-nullable ZERO = False
-nullable ONE = True
 nullable (CHAR _) = False
 nullable (ALT es) =
   any (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
@@ -171,6 +187,7 @@ nullable (PLUS (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 nullable (OPTIONAL _) = True
 nullable (NTIMES 0 _) = True
 nullable (NTIMES _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
+nullable (RECD _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 
 {- | Mainly used for when we need to pass down a new reference to 
 an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
@@ -184,8 +201,28 @@ newExp e = do
   }
   return e''
 
+{-| The derivation function performed on a zipper
+  wrt a character.
+
+  It consists of 4 nested functions:
+  up - 
+  up' - Where the real movement of the zipper occurs at
+    
+  down - 
+  down' - Where the "actual" derivation occurs at
+    (Using Brzozowski's rules)
+
+  Parameters:
+  Int - Position at which the derivation occurs at.
+  Char - The character that the derivation is taken wrt.
+  Zipper - The zipper to take the derivation on.
+
+  Returns:
+  IO [Zipper] - A list of zippers with the result 
+    of derivation.
+-}
 der ::  Int -> Char -> Zipper -> IO [Zipper]
-der pos c (Zipper re me) = up re me
+der pos c (Zipper ex me) = up ex me
     where
     down :: Context -> Exp -> IO [Zipper]
     down ct e = do
@@ -207,8 +244,6 @@ der pos c (Zipper re me) = up re me
         down' newMem e'
 
     down' :: Mem -> Exp' -> IO [Zipper]
-    down' _ ZERO = return []
-    down' _ ONE = return []
     down' m (CHAR d)
         | c == d = return [Zipper (SEQ c []) m]
         | otherwise = return []
@@ -227,7 +262,8 @@ der pos c (Zipper re me) = up re me
           (el:esr) -> do
             writeIORef (parents m') [AltC m]
             z1 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            z2 <- down (SeqC m' s [] esr) el -- | Parse as if the first part matched the empty string...
+            z2 <- down (SeqC m' s [] esr) el 
+            -- ^ Parse as if the first part matched the empty string...
             return (z1 ++ z2)
       else do
         writeIORef (parents m') [AltC m]
@@ -238,34 +274,18 @@ der pos c (Zipper re me) = up re me
         return (acc ++ zs)
         ) [] es
     down' m (STAR e) = do
-      mBott <- mBottom
       e' <- readIORef (exp' e)
-      let m' = mBott {
-        start = start m
-      }
-      let ct = StarC m [] e'
-      writeIORef (parents m') [ct]
-      down ct e
+      down (StarC m [] e') e
     down' m (PLUS e) = do
-      mBott <- mBottom
       e' <- readIORef (exp' e)
-      let m' = mBott {
-        start = start m 
-      }
-      let ct = PlusC m [] e'
-      writeIORef (parents m') [ct]
-      down ct e
+      down (PlusC m [] e') e
     down' m (OPTIONAL e) = down (OptionalC m []) e
     down' _ (NTIMES 0 _) = return [] 
     down' m (NTIMES n e) = do
-      mBott <- mBottom
       e' <- readIORef (exp' e)
-      let m' = mBott {
-        start = start m
-      }
-      let ct = NTimesC m (n-1) [] e'
-      writeIORef (parents m') [ct]
-      down ct e
+      down (NTimesC m (n-1) [] e') e
+    down' m (RECD s e) = do
+      down (RecdC m s) e
 
     up :: Exp' -> Mem -> IO [Zipper]
     up e' m = do
@@ -319,6 +339,7 @@ der pos c (Zipper re me) = up re me
           emptyStr <- createExp (SEQ '\0' [])
           down ct emptyStr 
       else return zs
+    up' e (RecdC m s) = up (RECD s e) m
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat <$> mapM f xs
@@ -336,7 +357,8 @@ run [] e = do
   if nullable e' then do
     z@(Zipper _ m) <- focus e
     ps <- readIORef (parents m)
-    let (SeqC m' s _ _) = head ps -- ps will never be empty on a newly focused zipper
+    let (SeqC m' s _ _) = head ps
+    -- ^ ps will never be empty on a newly focused zipper.
     writeIORef (exp' e) (SEQ '\0' [])
     writeIORef (parents m) [SeqC m' s [e] []]
     res <- unwrapTopZipper z
@@ -347,12 +369,87 @@ run s e = do
   zs <- ders 0 s [z]
   mapM unwrapTopZipper zs
 
-{-
-  Takes a list of Exp derived from the `run` function
+{-| Takes a list of Exp derived from the `run` function
   and returns whether the operation was successful or not.
 -}
 matcher :: [Exp] -> Bool
 matcher es = not (null es)
+
+{-| Flattens an Exp' into a String.
+
+  Based off of Urban's `flatten` from his method of lexing
+  with derivatives.
+
+  The reason why the `flatten` method does not have
+  extensive matching is because in all terminal cases of `up'`,
+  we return a SEQ, ALT or RECD when going back up the zipper, 
+  so there is no need to match any other Exp'
+-}
+flatten :: Exp' -> IO [Char]
+flatten (SEQ s []) = return [s]
+flatten (SEQ _ es) = do
+  es' <- concatMapM getExp' es
+  concatMapM flatten es'
+flatten (ALT es) = do
+  es' <- concatMapM getExp' es
+  concatMapM flatten es'
+flatten (RECD _ e) = do
+  e' <- readIORef (exp' e)
+  flatten e'
+flatten _ = return ['\0']
+
+getExp' :: Exp -> IO [Exp']
+getExp' (Exp _ eRef') = do
+  e' <- readIORef eRef'
+  case e' of
+    (CHAR _) -> return [e']
+    (SEQ _ []) -> return [e']
+    (SEQ _ es) -> concatMapM getExp' es
+    (ALT es) -> concatMapM getExp' es
+    (STAR e) -> getExp' e
+    (PLUS e) -> getExp' e
+    (OPTIONAL e) -> getExp' e
+    (NTIMES _ e) -> getExp' e
+    (RECD _ e) -> getExp' e
+
+{-| Returns a list of (String, String) pairs that will be used
+  for tokenising.
+
+  Based off of Urban's `env` from his method of lexing
+  with derivatives.
+
+  Like `flatten`, the reason why `env` does not have
+  extensive matching is because in all terminal cases of `up'`,
+  we return a SEQ, ALT or RECD when going back up the zipper, 
+  so there is no need to match any other Exp'
+-}
+env :: Exp' -> IO [([Char], [Char])]
+env (SEQ _ []) = return []
+env (SEQ _ es) = do
+  es' <- concatMapM getExp' es
+  concatMapM env es'
+env (ALT es) = do
+  es' <- concatMapM getExp' es
+  concatMapM env es'
+-- env (STAR e) = do
+--   es' <- getExp' e
+--   concatMapM env es'
+-- env (PLUS e) = do
+--   es' <- getExp' e
+--   concatMapM env es'
+-- env (OPTIONAL e) = do
+--   es' <- getExp' e
+--   concatMapM env es'
+-- env (NTIMES _ e) = do
+--   es' <- getExp' e
+  concatMapM env es'
+env (RECD s e) = do
+  e' <- readIORef (exp' e)
+  v <- flatten e'
+  vs <- env e' 
+  return ((s, v):vs)
+env _ = return []
+
 
 -- plug :: Exp -> Context -> Zipper
 -- plug e (SeqC TopC _ _ _) = Zipper e TopC
@@ -360,7 +457,10 @@ matcher es = not (null es)
 -- plug e (AltC ct) = plug e ct
 -- plug _ _ = error "could not plug"
 
--- pretty-printing (ish) Zippers
+-- | TODO: make this!
+-- | String extensions to make creation of Exps easier.
+
+-- | pretty-printing (ish) Zippers
 implode :: [[Char]] -> [Char]
 implode = intercalate "\n"
 
@@ -390,8 +490,6 @@ ppe (Exp _ e') =
   indent ("Mem: { ... }" : [ppe' (unsafePerformIO (readIORef e'))])
 
 ppe' :: Exp' -> String
-ppe' ZERO        = "0\n"
-ppe' ONE         = "1\n"
 ppe' (CHAR c)     = c : "\n"
 ppe' (SEQ s es)  =  (if null es then "SEQ "++[s] else "SEQ\n" ++ pps es) ++ "\n"
 ppe' (ALT es) = (if null es then "ALT []\n" else "ALT\n"++pps es) ++ "\n"
