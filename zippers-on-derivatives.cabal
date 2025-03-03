@@ -29,6 +29,7 @@ library
       Lexer
       Rexp
       RexpZipper
+      RexpZipperv2
       Token
       TreeZipper
       Val
@@ -72,6 +73,7 @@ test-suite zippers-on-derivatives-test
       LexerSpec
       RexpSpec
       RexpZipperSpec
+      RexpZipperv2Spec
       ValSpec
       Paths_zippers_on_derivatives
   autogen-modules:

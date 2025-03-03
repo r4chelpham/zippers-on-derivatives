@@ -18,7 +18,8 @@ data Exp = ZERO
             | ALT [Exp]
             | STAR Exp [Exp]
             | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
-            | RECD [Char] Exp [Exp] deriving (Ord, Eq, Show)
+            | RECD [Char] Exp [Exp]
+            deriving (Ord, Eq, Show)
 
 {-
     Default constructors for Exps that remember how 
@@ -50,7 +51,8 @@ data Context = TopC
             | AltC Context -- Alternate has one context shared between its children
             | StarC Context [Exp] Exp 
             | NTimesC Context Int [Exp] Exp Bool
-            | RecdC Context Exp [Char] [Exp] deriving (Ord, Eq, Show)
+            | RecdC Context Exp [Char] [Exp]
+            deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp Context deriving (Ord, Eq, Show)
 
@@ -76,6 +78,8 @@ nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
 nullable (STAR _ _) = True
+nullable (PLUS e _) = nullable e
+nullable (OPTIONAL _ _) = True
 nullable (NTIMES 0 _ _ _) = True
 nullable (NTIMES _ r _ _) = nullable r
 nullable (RECD _ r _) = nullable r
@@ -117,6 +121,15 @@ der c (Zipper re ctx) = up re ctx
         | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
+    down ct (SEQ s (e:es)) = 
+        if nullable e then
+            case es of
+                [] -> down (SeqC ct s [] es) e
+                (el:esr) ->
+                    let z1 = down (SeqC ct s [] es) e
+                        z2 = down (SeqC ct s [] esr) el
+                    in z1 ++ z2
+        else down (SeqC ct s [] es) e
     down ct (SEQ s (e:es)) =
         let zs = down (SeqC ct s [] es) e in
         if nullable e && null zs then
