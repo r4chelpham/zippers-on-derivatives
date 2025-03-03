@@ -9,6 +9,7 @@ import Data.IORef
 import Control.Monad (foldM)
 import Data.Ord (comparing)
 import Data.List (intercalate)
+import GHC.ResponseFile (escapeArgs)
 
 type Sym = Char
 
@@ -96,7 +97,8 @@ createExp :: Exp' -> IO Exp
 createExp e' = do
   m <- mBottom
   mRef <- newIORef m
-  eRef <- newIORef e'
+  eSimp' <- simp e'
+  eRef <- newIORef eSimp'
   return Exp
     {
       mem = mRef
@@ -460,6 +462,60 @@ env _ = return []
 -- plug e (AltC ct) = plug e ct
 -- plug _ _ = error "could not plug"
 
+-- | Simplifications for Exps to avoid unnecessary node creation
+
+isEmptySeq :: Exp' -> Bool
+isEmptySeq (SEQ _ []) = True
+isEmptySeq _          = False
+
+simp :: Exp' -> IO Exp'
+simp (SEQ s es) = do
+  esFlattened <- flattenSEQ es
+  es'' <- mapM (readIORef . exp') esFlattened
+  es' <- mapM simp es''
+
+  if ALT [] `elem` es'
+  then return (ALT [])
+  else do
+    let filteredEs = filter (not . isEmptySeq) es'
+    esSimp <- mapM createExp (filter (not . isEmptySeq) filteredEs)    
+    return (SEQ s esSimp)
+  where
+    flattenSEQ :: [Exp] -> IO [Exp]
+    flattenSEQ [] = return []
+    flattenSEQ (e:es) = do
+      e' <- readIORef (exp' e)
+      case e' of 
+        (SEQ s' es') | s == s' -> do
+          esFlat' <- flattenSEQ es'
+          esFlat <- flattenSEQ es
+          return (esFlat' ++ esFlat)
+        _ -> do
+          esFlat <- flattenSEQ es
+          return (e:esFlat)
+
+simp (ALT es) = do
+  esFlattened <- flattenALT es
+  es'' <- mapM (readIORef . exp') esFlattened
+  es' <- mapM simp es''
+  let filteredEs = filter (/= ALT []) es'
+  esSimp <- mapM createExp (filter (/= ALT []) filteredEs)
+  return (ALT esSimp)
+  where
+    flattenALT :: [Exp] -> IO [Exp]
+    flattenALT [] = return []
+    flattenALT (e:es) = do
+      e' <- readIORef (exp' e)
+      case e' of 
+        (ALT es') -> do
+          esFlat' <- flattenALT es'
+          esFlat <- flattenALT es
+          return (esFlat' ++ esFlat)
+        _ -> do
+          esFlat <- flattenALT es
+          return (e:esFlat)
+
+simp e' = return e'
 
 -- | String extensions to make creation of Exps easier.
 stringToExp' :: [Char] -> IO Exp'
@@ -468,13 +524,12 @@ stringToExp' [c] = return (CHAR c)
 stringToExp' (c:cs) = do
   e <- stringToExp [c]
   es <- mapM (createExp . CHAR) cs
-  return (SEQ '\0' (e:es))
+  simp (SEQ '\0' (e:es))
 
 stringToExp :: [Char] -> IO Exp
 stringToExp s = do
   e' <- stringToExp' s
   createExp e'
-
 
 class ToExp' a where
   toExp' :: a -> IO Exp'
@@ -533,33 +588,17 @@ infixl 4 <~>
 infixl 3 <|>
 -- infixl 1 <$>
 
-(<~>) :: (ToExp' a, ToExp' b) => a -> b -> IO Exp
+(<~>) :: (ToExp a, ToExp b) => a -> b -> IO Exp
 a <~> b = do
-  ae' <- toExp' a
-  be' <- toExp' b
-  case (ae', be') of
-      (SEQ _ xs, SEQ _ ys) -> createExp (SEQ '\0' (xs ++ ys))
-      (_, _) -> do
-        ae <- toExp ae'
-        be <- toExp be'
-        createExp (SEQ '\0' [ae,be])
+  ae <- toExp a
+  be <- toExp b
+  createExp (SEQ '\0' [ae,be])
 
-(<|>) :: (ToExp' a, ToExp' b) => a -> b -> IO Exp
+(<|>) :: (ToExp a, ToExp b) => a -> b -> IO Exp
 a <|> b = do
-  ae' <- toExp' a
-  be' <- toExp' b
-  case (ae', be') of
-      (ALT xs, ALT ys) -> createExp (ALT (xs ++ ys))
-      (ALT xs, _) -> do
-        be <- createExp be'
-        createExp (ALT (xs ++ [be]))
-      (_, ALT ys) -> do
-        ae <- createExp ae'
-        createExp (ALT (ae:ys))
-      (_, _) -> do
-        ae <- createExp ae' 
-        be <- createExp be' 
-        createExp (ALT [ae, be])
+  ae <- toExp a
+  be <- toExp b
+  createExp (ALT [ae, be])
 
 -- (<$>) :: String -> Exp -> IO Exp
 -- s <$> e = createExp (RECD s e)
