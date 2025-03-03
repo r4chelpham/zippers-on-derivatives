@@ -573,10 +573,10 @@ instance ToExp Exp' where
 instance ToExp String where
   toExp = stringToExp
 
--- infixl 9 ^>
--- infixl 8 ?>
--- infixl 7 +>
--- infixl 6 *>
+infixl 9 ^>
+infixl 8 ?>
+infixl 7 +>
+infixl 6 *>
 infixl 4 <~>
 infixl 3 <|>
 infixl 1 <$>
