@@ -9,7 +9,6 @@ import Data.IORef
 import Control.Monad (foldM)
 import Data.Ord (comparing)
 import Data.List (intercalate)
-import GHC.ResponseFile (escapeArgs)
 
 type Sym = Char
 
@@ -28,7 +27,7 @@ instance Ord Exp where
     compare = comparing (unsafePerformIO . readIORef . exp')
 
 instance Eq Exp where
-  (Exp m1 e1') == (Exp m2 e2') =
+  (Exp _ e1') == (Exp _ e2') =
     unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
 
 {-| ZERO and ONE are not needed in the algorithm because they
@@ -90,8 +89,11 @@ instance Show Mem where
     show (unsafePerformIO (readIORef res)) ++
     "}"
 
-{-| Creates an Exp (an Exp' with an associated memory)
-  from a given Exp'.
+{-| Gives an Exp' an associated memory.
+
+  Mainly called when we create an Exp from scratch - 
+  often at the very beginning and not during the 
+  actual matching/lexing of the Exp.
 -}
 createExp :: Exp' -> IO Exp
 createExp e' = do
@@ -195,7 +197,10 @@ nullable (NTIMES _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 nullable (RECD _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 
 {- | Mainly used for when we need to pass down a new reference to 
-an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
+  an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
+
+  We call this function when simplification is deemed unnecessary
+  - to avoid excessive pruning.
 -}
 newExp :: Exp' -> IO Exp
 newExp e = do 
@@ -218,9 +223,9 @@ newExp e = do
     (Using Brzozowski's rules)
 
   Parameters:
-  Int - Position at which the derivation occurs at.
-  Char - The character that the derivation is taken wrt.
-  Zipper - The zipper to take the derivation on.
+  pos - Position at which the derivation occurs at.
+  c - The character that the derivation is taken wrt.
+  (Zipper ex me) - The zipper to take the derivation on.
 
   Returns:
   IO [Zipper] - A list of zippers with the result 
@@ -341,7 +346,7 @@ der pos c (Zipper ex me) = up ex me
       e'' <- newExp e'
       zs <- down ct e''
       if null zs && nullable e' then do
-          emptyStr <- createExp (SEQ '\0' [])
+          emptyStr <- newExp (SEQ '\0' [])
           down ct emptyStr 
       else return zs
     up' e (RecdC m s) = up (RECD s e) m
@@ -436,18 +441,6 @@ env (SEQ _ es) = do
 env (ALT es) = do
   es' <- concatMapM getExp' es
   concatMapM env es'
--- env (STAR e) = do
---   es' <- getExp' e
---   concatMapM env es'
--- env (PLUS e) = do
---   es' <- getExp' e
---   concatMapM env es'
--- env (OPTIONAL e) = do
---   es' <- getExp' e
---   concatMapM env es'
--- env (NTIMES _ e) = do
---   es' <- getExp' e
-  concatMapM env es'
 env (RECD s e) = do
   e' <- readIORef (exp' e)
   v <- flatten e'
@@ -524,7 +517,7 @@ stringToExp' [c] = return (CHAR c)
 stringToExp' (c:cs) = do
   e <- stringToExp [c]
   es <- mapM (createExp . CHAR) cs
-  simp (SEQ '\0' (e:es))
+  return (SEQ '\0' (e:es))
 
 stringToExp :: [Char] -> IO Exp
 stringToExp s = do
@@ -586,7 +579,7 @@ instance ToExp String where
 -- infixl 6 *>
 infixl 4 <~>
 infixl 3 <|>
--- infixl 1 <$>
+infixl 1 <$>
 
 (<~>) :: (ToExp a, ToExp b) => a -> b -> IO Exp
 a <~> b = do
@@ -600,20 +593,30 @@ a <|> b = do
   be <- toExp b
   createExp (ALT [ae, be])
 
--- (<$>) :: String -> Exp -> IO Exp
--- s <$> e = createExp (RECD s e)
+(<$>) :: ToExp a => String -> a -> IO Exp
+s <$> a = do
+  e <- toExp a
+  createExp (RECD s e)
 
--- (*>) :: ToExp a => a -> b -> IO Exp
--- r *> _ = STAR (toExp r)
+(*>) :: ToExp a => a -> b -> IO Exp
+a *> _ = do
+  e <- toExp a
+  createExp (STAR e)
 
--- (+>) :: ToExp a => a -> b -> IO Exp
--- r +> _ = PLUS (toExp r)
+(+>) :: ToExp a => a -> b -> IO Exp
+a +> _ = do
+  e <- toExp a
+  createExp (PLUS e)
 
--- (?>) :: ToExp a => a -> b -> IO Exp
--- r ?> _ = OPTIONAL (toExp r)
+(?>) :: ToExp a => a -> b -> IO Exp
+a ?> _ = do
+  e <- toExp a
+  createExp (OPTIONAL e)
 
--- (^>) :: ToExp a => a -> Int -> IO Exp
--- r ^> n = NTIMES n (toExp r)
+(^>) :: ToExp a => a -> Int -> IO Exp
+a ^> n = do
+  e <- toExp a
+  createExp (NTIMES n e)
 
 -- | pretty-printing (ish) Zippers
 implode :: [[Char]] -> [Char]

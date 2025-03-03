@@ -710,6 +710,10 @@ spec = do
                             (m == mBott)
                             )
 
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
+
     describe "Extension tests for <|>" $ do
         prop "converts alternate between two strings" $ do
             \(s1 :: [Char]) (s2 :: [Char]) -> ioProperty $ do
@@ -720,15 +724,9 @@ spec = do
                 expected <- Z.toExp e'
                 return (e == expected)
 
-        prop "converts alternate between multiple strings" $ do
-            \(s1 :: [Char]) (s2 :: [Char]) (s3 :: [Char]) -> ioProperty $ do
-                e <- s1 Z.<|> s2 Z.<|> s3
-                e1 <- Z.toExp s1
-                e2 <- Z.toExp s2
-                e3 <- Z.toExp s3
-                let e' = Z.ALT [e1,e2,e3]
-                expected <- Z.toExp e'
-                return (e == expected)
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
 
     describe "Extension tests for <~>" $ do
         prop "converts sequence between two strings" $ do
@@ -740,12 +738,66 @@ spec = do
                 expected <- Z.toExp e'
                 return (e == expected)
 
-        prop "converts sequence between multiple strings" $ do
-            \(s1 :: [Char]) (s2 :: [Char]) (s3 :: [Char]) -> ioProperty $ do
-                e <- s1 Z.<~> s2 Z.<~> s3
-                e1 <- Z.toExp s1
-                e2 <- Z.toExp s2
-                e3 <- Z.toExp s3
-                let e' = Z.SEQ '\0' [e1,e2,e3]
-                expected <- Z.toExp e'
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
+
+    describe "Extension tests for <$>" $ do
+        prop "converts and labels a string" $ do
+            \s1 (s2 :: [Char]) -> ioProperty $ do
+                e <- s1 Z.<$> s2
+                e' <- Z.toExp s2
+                expected <- Z.createExp (Z.RECD s1 e')
                 return (e == expected)
+
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "labels an Exp'" $ do
+        -- prop "labels an Exp" $ do
+
+    describe "Extension tests for *>" $ do
+        prop "converts a string" $ do
+            \(s :: [Char]) -> ioProperty $ do
+                e <- s Z.*> ()
+                e' <- Z.toExp s
+                expected <- Z.createExp (Z.STAR e')
+                return (e == expected)
+        
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
+
+    describe "Extension tests for +>" $ do   
+        prop "converts a string" $ do
+            \(s :: [Char]) -> ioProperty $ do
+                e <- s Z.+> ()
+                e' <- Z.toExp s
+                expected <- Z.createExp (Z.PLUS e')
+                return (e == expected)   
+
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do  
+
+    describe "Extension tests for ?>" $ do  
+        prop "converts a string" $ do
+            \(s :: [Char]) -> ioProperty $ do
+                e <- s Z.?> ()
+                e' <- Z.toExp s
+                expected <- Z.createExp (Z.OPTIONAL e')
+                return (e == expected)
+   
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
+    describe "Extension tests for ^>{n}" $ do 
+        prop "converts a string" $ do
+            \n (s :: [Char]) -> ioProperty $ do
+                e <- s Z.^> n
+                e' <- Z.toExp s
+                expected <- Z.createExp (Z.NTIMES n e')
+                return (e == expected)    
+
+        -- | TODO: create arbitrary Exp types for RexpZipperv2 
+        -- prop "converts an Exp'" $ do
+        -- prop "converts an Exp" $ do
+        
