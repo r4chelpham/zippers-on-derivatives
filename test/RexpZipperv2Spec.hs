@@ -1,6 +1,9 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module RexpZipperv2Spec where
 
 import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 import qualified RexpZipperv2 as Z
 import GHC.IORef
 
@@ -653,3 +656,96 @@ spec = do
             e' <- readIORef (Z.exp' (head es))
             res <- Z.env e'
             res  `shouldBe` []
+
+    describe "String extension tests (toExp')" $ do
+        it "converts the empty string to an Exp'" $ do
+            e' <- Z.toExp' ""
+            e' `shouldBe` Z.SEQ '\0' []
+        
+        prop "converts a character to an Exp'" $ do
+            \c -> ioProperty  $ do
+                e' <- Z.toExp' [c] 
+                return (e' == Z.CHAR c)
+
+        prop "converts Strings -> Exp'" $ do
+            \c cs -> ioProperty $ do
+                let s = c:cs
+                e' <- Z.toExp' s
+                case s of
+                    [c] -> return (e' == Z.CHAR c)
+                    _ -> do
+                        expectedVals <- mapM (Z.createExp . Z.CHAR) s
+                        return (e' == Z.SEQ '\0' expectedVals)
+
+    describe "String extension tests (toExp)" $ do
+        it "converts the empty string to an Exp" $ do
+            (Z.Exp mRef eRef') <- Z.toExp ""
+            m <- readIORef mRef
+            e' <- readIORef eRef'
+            mBott <- Z.mBottom
+            m `shouldBe` mBott
+            e' `shouldBe` Z.SEQ '\0' []
+        
+        prop "converts a character to an Exp" $ do
+            \c -> ioProperty  $ do
+                (Z.Exp mRef eRef') <- Z.toExp [c] 
+                m <- readIORef mRef
+                e' <- readIORef eRef'
+                mBott <- Z.mBottom
+                return ((e' == Z.CHAR c) && (m == mBott))
+
+        prop "converts Strings -> Exp" $ do
+            \c cs -> ioProperty $ do
+                let s = c:cs
+                (Z.Exp mRef eRef') <- Z.toExp s
+                m <- readIORef mRef
+                e' <- readIORef eRef'
+                mBott <- Z.mBottom
+                case s of
+                    [c] -> return ((e' == Z.CHAR c) && (m == mBott))
+                    _ -> do
+                        expectedVals <- mapM (Z.createExp . Z.CHAR) s
+                        return (
+                            (e' == Z.SEQ '\0' expectedVals) && 
+                            (m == mBott)
+                            )
+
+    describe "Extension tests for <|>" $ do
+        prop "converts alternate between two strings" $ do
+            \(s1 :: [Char]) (s2 :: [Char]) -> ioProperty $ do
+                e <- s1 Z.<|> s2
+                e1 <- Z.toExp s1
+                e2 <- Z.toExp s2
+                let e' = Z.ALT [e1, e2]
+                expected <- Z.toExp e'
+                return (e == expected)
+
+        prop "converts alternate between multiple strings" $ do
+            \(s1 :: [Char]) (s2 :: [Char]) (s3 :: [Char]) -> ioProperty $ do
+                e <- s1 Z.<|> s2 Z.<|> s3
+                e1 <- Z.toExp s1
+                e2 <- Z.toExp s2
+                e3 <- Z.toExp s3
+                let e' = Z.ALT [e1,e2,e3]
+                expected <- Z.toExp e'
+                return (e == expected)
+
+    describe "Extension tests for <~>" $ do
+        prop "converts sequence between two strings" $ do
+            \(s1 :: [Char]) (s2 :: [Char]) -> ioProperty $ do
+                e <- s1 Z.<~> s2
+                e1 <- Z.toExp s1
+                e2 <- Z.toExp s2
+                let e' = Z.SEQ '\0' [e1, e2]
+                expected <- Z.toExp e'
+                return (e == expected)
+
+        prop "converts sequence between multiple strings" $ do
+            \(s1 :: [Char]) (s2 :: [Char]) (s3 :: [Char]) -> ioProperty $ do
+                e <- s1 Z.<~> s2 Z.<~> s3
+                e1 <- Z.toExp s1
+                e2 <- Z.toExp s2
+                e3 <- Z.toExp s3
+                let e' = Z.SEQ '\0' [e1,e2,e3]
+                expected <- Z.toExp e'
+                return (e == expected)

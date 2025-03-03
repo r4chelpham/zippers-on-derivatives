@@ -1,9 +1,12 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+
 module RexpZipperv2 where
 
 import GHC.IORef
 import System.IO.Unsafe (unsafePerformIO)
 import Data.IORef
-import Control.Monad (foldM, (>=>))
+import Control.Monad (foldM)
 import Data.Ord (comparing)
 import Data.List (intercalate)
 
@@ -25,7 +28,7 @@ instance Ord Exp where
 
 instance Eq Exp where
   (Exp m1 e1') == (Exp m2 e2') =
-    m1 == m2 && e1' == e2'
+    unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
 
 {-| ZERO and ONE are not needed in the algorithm because they
   are represented as ALT [] and SEQ [] respectively.
@@ -68,8 +71,8 @@ instance Eq Mem where
   (Mem s1 e1 ps1 r1) == (Mem s2 e2 ps2 r2) =
     s1 == s2 &&
     e1 == e2 &&
-    ps1 == ps2 &&
-    r1 == r2
+    unsafePerformIO (readIORef ps1) == unsafePerformIO (readIORef ps2) &&
+    unsafePerformIO (readIORef r1) == unsafePerformIO (readIORef r2)
 
 instance Ord Mem where
   compare = comparing start
@@ -130,14 +133,14 @@ defaults = do
   Equivalent to E⊥ in the Darragh and Adams paper.
 -}
 eBottom :: IO Exp
-eBottom = fst <$> defaults
+eBottom = fst Prelude.<$> defaults
 
 {-| Retrieve the default Memory.
 
   Equivalent to M⊥ in the Darragh and Adams paper.
 -}
 mBottom :: IO Mem
-mBottom = snd <$> defaults
+mBottom = snd Prelude.<$> defaults
 
 {-| Null character to signal the end of a lex/match.
 -}
@@ -342,7 +345,7 @@ der pos c (Zipper ex me) = up ex me
     up' e (RecdC m s) = up (RECD s e) m
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
-concatMapM f xs = concat <$> mapM f xs
+concatMapM f xs = concat Prelude.<$> mapM f xs
 
 ders :: Int -> [Char] -> [Zipper] -> IO [Zipper]
 ders pos [] zs = do
@@ -457,8 +460,121 @@ env _ = return []
 -- plug e (AltC ct) = plug e ct
 -- plug _ _ = error "could not plug"
 
--- | TODO: make this!
+
 -- | String extensions to make creation of Exps easier.
+stringToExp' :: [Char] -> IO Exp'
+stringToExp' [] = return (SEQ '\0' [])
+stringToExp' [c] = return (CHAR c)
+stringToExp' (c:cs) = do
+  e <- stringToExp [c]
+  es <- mapM (createExp . CHAR) cs
+  return (SEQ '\0' (e:es))
+
+stringToExp :: [Char] -> IO Exp
+stringToExp s = do
+  e' <- stringToExp' s
+  createExp e'
+
+
+class ToExp' a where
+  toExp' :: a -> IO Exp'
+
+instance ToExp' (IO Exp') where
+  toExp' :: IO Exp' -> IO Exp'
+  toExp' = id
+
+instance ToExp' Exp' where
+  toExp' :: Exp' -> IO Exp'
+  toExp' = return
+
+instance ToExp' Exp where
+  toExp' :: Exp -> IO Exp'
+  toExp' e = readIORef (exp' e)
+
+instance ToExp' (IO Exp) where
+  toExp' :: IO Exp -> IO Exp'
+  toExp' eIO = do
+    e <- eIO
+    readIORef (exp' e)
+
+instance ToExp' String where
+  toExp' = stringToExp'
+
+
+class ToExp a where
+  toExp :: a -> IO Exp
+
+instance ToExp Exp where
+  toExp :: Exp -> IO Exp
+  toExp = return
+
+instance ToExp (IO Exp) where
+  toExp :: IO Exp -> IO Exp
+  toExp = id
+
+instance ToExp (IO Exp') where
+  toExp :: IO Exp' -> IO Exp
+  toExp eIO' = do
+    e' <- eIO'
+    createExp e'
+
+instance ToExp Exp' where
+  toExp :: Exp' -> IO Exp
+  toExp = createExp
+
+instance ToExp String where
+  toExp = stringToExp
+
+-- infixl 9 ^>
+-- infixl 8 ?>
+-- infixl 7 +>
+-- infixl 6 *>
+infixl 4 <~>
+infixl 3 <|>
+-- infixl 1 <$>
+
+(<~>) :: (ToExp' a, ToExp' b) => a -> b -> IO Exp
+a <~> b = do
+  ae' <- toExp' a
+  be' <- toExp' b
+  case (ae', be') of
+      (SEQ _ xs, SEQ _ ys) -> createExp (SEQ '\0' (xs ++ ys))
+      (_, _) -> do
+        ae <- toExp ae'
+        be <- toExp be'
+        createExp (SEQ '\0' [ae,be])
+
+(<|>) :: (ToExp' a, ToExp' b) => a -> b -> IO Exp
+a <|> b = do
+  ae' <- toExp' a
+  be' <- toExp' b
+  case (ae', be') of
+      (ALT xs, ALT ys) -> createExp (ALT (xs ++ ys))
+      (ALT xs, _) -> do
+        be <- createExp be'
+        createExp (ALT (xs ++ [be]))
+      (_, ALT ys) -> do
+        ae <- createExp ae'
+        createExp (ALT (ae:ys))
+      (_, _) -> do
+        ae <- createExp ae' 
+        be <- createExp be' 
+        createExp (ALT [ae, be])
+
+-- (<$>) :: String -> Exp -> IO Exp
+-- s <$> e = createExp (RECD s e)
+
+-- (*>) :: ToExp a => a -> b -> IO Exp
+-- r *> _ = STAR (toExp r)
+
+-- (+>) :: ToExp a => a -> b -> IO Exp
+-- r +> _ = PLUS (toExp r)
+
+-- (?>) :: ToExp a => a -> b -> IO Exp
+-- r ?> _ = OPTIONAL (toExp r)
+
+-- (^>) :: ToExp a => a -> Int -> IO Exp
+-- r ^> n = NTIMES n (toExp r)
 
 -- | pretty-printing (ish) Zippers
 implode :: [[Char]] -> [Char]
