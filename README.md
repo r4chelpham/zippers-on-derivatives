@@ -1,6 +1,6 @@
 # zippers-on-derivatives
 
-This is the repository for the artifact from my project on using zippers in the derivation of regualr expressions. 
+This is the repository for the artifact from my project on using zippers in the derivation of regular expressions. 
 
 This artifact includes 3 implementations:
 - Matching and lexing with zippers from Efficient Parsing with Derivatives and Zippers (Edelmann)
