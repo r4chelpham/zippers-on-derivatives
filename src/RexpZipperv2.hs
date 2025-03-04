@@ -9,6 +9,7 @@ import Data.IORef
 import Control.Monad (foldM)
 import Data.Ord (comparing)
 import Data.List (intercalate)
+import qualified Data.Set as Set
 
 type Sym = Char
 
@@ -41,6 +42,7 @@ data Exp' = CHAR Char
             | OPTIONAL Exp
             | NTIMES Int Exp
             | RECD [Char] Exp
+            | RANGE (Set.Set Char)
             deriving (Ord, Eq, Show)
 
 data Context = TopC
@@ -158,10 +160,10 @@ unwrapTopZipper :: Zipper -> IO Exp
 unwrapTopZipper (Zipper _ m) = do
   ps <- readIORef (parents m)
   case ps of
-    [SeqC m' '\0' (e:_) []] -> do
+    (SeqC m' '\0' (e:_) []:_) -> do
         ps' <- readIORef (parents m')
         if ps' == [TopC] then return e
-        else error "Top zipper is invalid"
+        else error "parents doesn't meet the given structure"
     _ -> error "Top zipper is invalid"
 
 {-| Creates a zipper that focuses on the given
@@ -195,6 +197,7 @@ nullable (OPTIONAL _) = True
 nullable (NTIMES 0 _) = True
 nullable (NTIMES _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
 nullable (RECD _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
+nullable (RANGE _) = False
 
 {- | Mainly used for when we need to pass down a new reference to 
   an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
@@ -296,6 +299,9 @@ der pos c (Zipper ex me) = up ex me
       down (NTimesC m (n-1) [] e') e
     down' m (RECD s e) = do
       down (RecdC m s) e
+    down' m (RANGE cs)
+      | Set.member c cs = return [Zipper (SEQ c []) m]
+      | otherwise = return []
 
     up :: Exp' -> Mem -> IO [Zipper]
     up e' m = do
@@ -345,9 +351,17 @@ der pos c (Zipper ex me) = up ex me
       let ct = NTimesC m (n-1) (e:es) e'
       e'' <- newExp e'
       zs <- down ct e''
-      if null zs && nullable e' then do
-          emptyStr <- newExp (SEQ '\0' [])
-          down ct emptyStr 
+      if nullable e' then do
+        mBott <- mBottom
+        let m' = mBott {
+          start = start m
+        }
+        writeIORef (parents m') [AltC m]
+        zs' <- down (NTimesC m' (n-1) es e') e
+        {- ^ Similar to the nullable case for SEQ , we have to check
+          whether NTIMES can "skip" one iteration (i.e. it matches 
+          the empty string. -}
+        return (zs' ++ zs)
       else return zs
     up' e (RecdC m s) = up (RECD s e) m
 
@@ -413,6 +427,7 @@ getExp' (Exp _ eRef') = do
   e' <- readIORef eRef'
   case e' of
     (CHAR _) -> return [e']
+    (RANGE _) -> return [e']
     (SEQ _ []) -> return [e']
     (SEQ _ es) -> concatMapM getExp' es
     (ALT es) -> concatMapM getExp' es
@@ -435,18 +450,30 @@ getExp' (Exp _ eRef') = do
 -}
 env :: Exp' -> IO [([Char], [Char])]
 env (SEQ _ []) = return []
-env (SEQ _ es) = do
-  es' <- concatMapM getExp' es
-  concatMapM env es'
-env (ALT es) = do
-  es' <- concatMapM getExp' es
-  concatMapM env es'
+env (SEQ _ es) = process es -- | Continue looking for a RECD...
+env (ALT es) = process es -- | Continue looking for a RECD...
 env (RECD s e) = do
   e' <- readIORef (exp' e)
   v <- flatten e'
   vs <- env e' 
   return ((s, v):vs)
 env _ = return []
+
+process :: [Exp] -> IO [([Char], [Char])]
+process [] = return []
+process (e:es) = do
+  e' <- readIORef (exp' e)
+  case e' of
+    recd@(RECD _ _) -> env recd 
+    (SEQ _ es') -> do 
+      rs <- process es'
+      rs' <- process es
+      return (rs ++ rs')
+    (ALT es') -> do
+      rs <- process es'
+      rs' <- process es
+      return (rs ++ rs')
+    _ -> process es
 
 
 -- plug :: Exp -> Context -> Zipper
@@ -651,7 +678,8 @@ ppe' :: Exp' -> String
 ppe' (CHAR c)     = c : "\n"
 ppe' (SEQ s es)  =  (if null es then "SEQ "++[s] else "SEQ\n" ++ pps es) ++ "\n"
 ppe' (ALT es) = (if null es then "ALT []\n" else "ALT\n"++pps es) ++ "\n"
-
+ppe' (RANGE cs) = Set.showTreeWith True False cs ++ "\n"
+ppe' (STAR e) = "STAR\n" ++ indent [ppe e]
 ppz :: Zipper -> String
 ppz (Zipper e' m) = "ZIP\n" ++ indent (ppe' e':[ppm m])
 
