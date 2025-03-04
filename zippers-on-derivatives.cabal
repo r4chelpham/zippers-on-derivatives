@@ -33,6 +33,7 @@ library
       Token
       TreeZipper
       Val
+      ZipperLexer
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:
