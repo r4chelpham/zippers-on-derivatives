@@ -500,6 +500,32 @@ spec = do
             es <- Z.run "aaaa" e
             Z.matcher es `shouldBe` False
 
+        it "matches nullable NTIMES in a SEQ (1)" $ do
+            e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        it "matches nullable NTIMES in a SEQ (2)" $ do
+            e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
+            es <- Z.run "a" e
+            Z.matcher es `shouldBe` False
+        
+        it "matches nullable NTIMES in a SEQ (2)" $ do
+            e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
+            es <- Z.run "aa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches nullable NTIMES in a SEQ (3)" $ do
+            e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
+            es <- Z.run "aaa" e
+            Z.matcher es `shouldBe` True
+
+        it "matches nullable NTIMES in a SEQ (4)" $ do
+            e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
+            es <- Z.run "aaaa" e
+            Z.matcher es `shouldBe` True
+
+
         -- | TODO: create property based tests for this instead
         it "matches a RECD just like it would match a regular CHAR (1)" $ do
             a <- Z.createExp (Z.CHAR 'a')
