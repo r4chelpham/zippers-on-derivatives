@@ -16,9 +16,9 @@ data Exp = ZERO
             | RANGE (Set.Set Char)
             | SEQ Sym [Exp]
             | ALT [Exp]
-            | STAR Exp [Exp]
-            | NTIMES Int Exp [Exp] Bool -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
-            | RECD [Char] Exp [Exp]
+            | STAR Exp
+            | NTIMES Int Exp -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
+            | RECD [Char] Exp
             deriving (Ord, Eq, Show)
 
 {-
@@ -32,7 +32,7 @@ defaultSEQ :: [Exp] -> Exp
 defaultSEQ = SEQ '\0'
 
 defaultSTAR :: Exp -> Exp
-defaultSTAR r = STAR r []
+defaultSTAR = STAR
 
 defaultPLUS :: Exp -> Exp
 defaultPLUS r = defaultSEQ [r, defaultSTAR r]
@@ -41,17 +41,17 @@ defaultOPTIONAL :: Exp -> Exp
 defaultOPTIONAL r = ALT [ONE, r]
 
 defaultNTIMES :: Int -> Exp -> Exp
-defaultNTIMES n r = NTIMES n r [] (nullable r)
+defaultNTIMES = NTIMES
 
 defaultRECD :: String -> Exp -> Exp
-defaultRECD s e = RECD s e []
+defaultRECD = RECD
 
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Context -- Alternate has one context shared between its children
-            | StarC Context [Exp] Exp 
-            | NTimesC Context Int [Exp] Exp Bool
-            | RecdC Context Exp [Char] [Exp]
+            | StarC Context [Exp] Exp
+            | NTimesC Context Int [Exp] Exp
+            | RecdC Context [Char]
             deriving (Ord, Eq, Show)
 
 data Zipper = Zipper Exp Context deriving (Ord, Eq, Show)
@@ -64,7 +64,7 @@ instance Arbitrary Exp where
         , RANGE Prelude.<$> arbitrary
         , SEQ Prelude.<$> arbitrary <*> listOf arbitrary
         , ALT Prelude.<$> listOf arbitrary
-        , STAR Prelude.<$> arbitrary <*> listOf arbitrary
+        , STAR Prelude.<$> arbitrary
         ]
 
 {- 
@@ -77,10 +77,10 @@ nullable (CHAR _) = False
 nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
-nullable (STAR _ _) = True
-nullable (NTIMES 0 _ _ _) = True
-nullable (NTIMES _ r _ _) = nullable r
-nullable (RECD _ r _) = nullable r
+nullable (STAR _) = True
+nullable (NTIMES 0 _) = True
+nullable (NTIMES _ r) = nullable r
+nullable (RECD _ r) = nullable r
 
 {-
     Creates a zipper that focuses on 
@@ -119,7 +119,7 @@ der c (Zipper re ctx) = up re ctx
         | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
-    down ct (SEQ s (e:es)) = 
+    down ct (SEQ s (e:es)) =
         if nullable e then
             case es of
                 [] -> down (SeqC ct s [] es) e
@@ -127,27 +127,20 @@ der c (Zipper re ctx) = up re ctx
                     let z1 = down (SeqC ct s [] es) e
                         z2 = down (SeqC ct s [] esr) el
                     in z1 ++ z2
-        else down (SeqC ct s [] es) e
-    down ct (SEQ s (e:es)) =
-        let zs = down (SeqC ct s [] es) e in
-        if nullable e && null zs then
-            up (SEQ s es) (SeqC ct s [] es)
-        else zs
+        else down (SeqC ct s [e] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct r@(STAR e es) =
-        let zs = down (StarC ct es e) e in
+    down ct (STAR e) = 
+    {- ^ Fails on cases like (a*)*b because it has no way 
+    of remembering the previous match. -}
+        let zs = down (StarC ct [] e) e in
             if null zs then
-                 up r (StarC ct es e)
-            else zs
-    down ct r@(NTIMES 0 _ _ _) = up r ct
-    down ct r@(NTIMES n e es nu) =
-        let ctt = NTimesC ct (n-1) es e nu
-            zs = down ctt e in
-            if nu then zs ++ up ONE ctt else
-            if null zs then
-                up r ct
-            else zs
-    down ct (RECD s r' es) = down (RecdC ct r' s es) r'
+                up e ct
+            else zs   
+    down ct r@(NTIMES 0 _) = up r ct
+    down ct (NTIMES n e) =
+        let ctt = NTimesC ct (n-1) [] e
+        in down ctt e
+    down ct (RECD s r') = down (RecdC ct s) r'
 
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
@@ -157,11 +150,16 @@ der c (Zipper re ctx) = up re ctx
     up e (StarC ct es r) =
         let zs = down (StarC ct (e:es) r) r in
             if null zs then
-                up (STAR r (reverse (e:es))) ct
+                up (STAR (defaultSEQ (reverse (e:es)))) ct
             else zs
-    up e (NTimesC ct 0 es r _) = up (NTIMES 0 r (reverse (e:es)) True) ct
-    up e (NTimesC ctt n es r nu) = down (NTimesC ctt (n-1) (e:es) r nu) r
-    up e (RecdC ct r s es) = down (RecdC ct r s (e:es)) e
+    up e (NTimesC ct 0 es _) = up (NTIMES 0 (defaultSEQ (reverse (e:es)))) ct
+    up e (NTimesC ctt n es r) =
+        if nullable e then
+            down (NTimesC ctt (n-1) (e:es) r) r
+            ++ down (NTimesC ctt (n-1) es r) r
+        else
+            down (NTimesC ctt (n-1) (e:es) r) r
+    up e (RecdC ct s) = up (RECD s e) ct
 
 {-
     Derives an Exp from a String (List of characters)
@@ -195,12 +193,12 @@ matcher s r =
 -}
 isNullable :: Context -> Bool
 isNullable TopC = False
-isNullable (NTimesC ct n _ _ _) = n == 0 && isNullable ct
+isNullable (NTimesC ct n _ _) = n == 0 && isNullable ct
 isNullable (AltC ct) = isNullable ct
 isNullable (SeqC TopC _ _ _) = True
 isNullable (SeqC ct _ _ es) = all nullable es && isNullable ct
 isNullable (StarC ct _ _) = isNullable ct
-isNullable (RecdC ct _ _ _) = isNullable ct
+isNullable (RecdC ct _) = isNullable ct
 
 {-
     Returns the lexed result from taking successive 
@@ -225,9 +223,9 @@ plug :: Exp -> Context -> Zipper
 plug e (SeqC TopC _ _ _) = Zipper e TopC
 plug e (SeqC ct s es _) = plug (SEQ s (reverse (e:es))) ct
 plug e (AltC ct) = plug e ct
-plug e (StarC ct es r) = plug (STAR r (reverse (e:es))) ct
-plug e (NTimesC ct 0 es r _) = plug (NTIMES 0 r (reverse (e:es)) True) ct
-plug e (RecdC ct r s es) = plug (RECD s r (reverse (e:es))) ct
+plug e (StarC ct es _) = plug (STAR (defaultSEQ (reverse (e:es)))) ct
+plug e (NTimesC ct 0 es _) = plug (NTIMES 0 (defaultSEQ (reverse (e:es)))) ct
+plug e (RecdC ct s) = plug (RECD s e) ct
 plug _ _ = error "Could not find a path from the leaf to the root"
 
 flatten :: Exp -> [Char]
@@ -242,9 +240,9 @@ flatten (SEQ s es)
     | s == '\0' = concatMap flatten es
     | otherwise = s:concatMap flatten es
 flatten (ALT es) = concatMap flatten es
-flatten (STAR _ es) = concatMap flatten es
-flatten (NTIMES _ _ es _) = concatMap flatten es
-flatten (RECD _ _ es) = concatMap flatten es
+flatten (STAR e) = flatten e
+flatten (NTIMES _ e) = flatten e
+flatten (RECD _ e) = flatten e
 
 env :: Exp -> [([Char], [Char])]
 env ZERO = error "ZERO is an invalid input for `env`"
@@ -253,14 +251,14 @@ env (CHAR _) = []
 env (RANGE _) = []
 env (ALT es) = concatMap env es
 env (SEQ _ es) = concatMap env es
-env (STAR _ es) = concatMap env es
-env (NTIMES _ _ es _) = concatMap env es
-env (RECD s _ es) = (s, concatMap flatten es) : concatMap env es
+env (STAR e) = env e
+env (NTIMES _ e) = env e
+env (RECD s e) = (s, flatten e) : env e
 
 simp :: Exp -> Exp
 simp (SEQ s es) = SEQ s (map simp (filter (/= ONE) es))
 simp (ALT es) = ALT (map simp (filter (/= ZERO) es))
-simp (STAR (STAR e _) _) = simp (STAR e [])
+simp (STAR (STAR e)) = simp (STAR e)
 simp r = r
 
 {- 
@@ -290,16 +288,13 @@ infixl 4 <~>
 infixl 3 <|>
 infixl 1 <$>
 
--- TODO: fix this
 (<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
-a <~> b = defaultSEQ [toExp a, toExp b]
-    -- case (toExp a, toExp b) of
-    --     (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
-    --     (ae, be) -> defaultSEQ [ae,be]
+a <~> b = 
+    case (toExp a, toExp b) of
+        (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
+        (ae, be) -> defaultSEQ [ae,be]
 
--- TODO: fix this
 (<|>) :: (ToExp a, ToExp b) => a -> b -> Exp
--- a <|> b = ALT [toExp a, toExp b]
 a <|> b =
     case (toExp a, toExp b) of
     (ALT xs, ALT ys) -> ALT (xs ++ ys)
@@ -323,7 +318,6 @@ r ?> _ = defaultOPTIONAL (toExp r)
 r ^> n = defaultNTIMES n (toExp r)
 
 {- WHILE Language registers - NOTE: doesn't work rn -}
-
 keyword :: Exp
 keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|>
           "to" <|> "true" <|> "false" <|> "read" <|> "write" <|>
@@ -425,15 +419,17 @@ pp (CHAR c)     = c : "\n"
 pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
 pp (SEQ s es)  =  (if null es then [s] else "SEQ\n" ++ pps es) ++ "\n"
 pp (ALT es) = "ALT\n" ++ pps es
-pp (STAR e es)    = "STAR\n" ++ (if null es then pp e else pps es)
-pp (RECD s e es)    = "RECD\n" ++ s ++ "\n" ++ (if null es then pp e else pps es)
+pp (STAR e)    = "STAR\n" ++ pp e
+pp (RECD s e)    = "RECD\n" ++ s ++ "\n" ++ pp e
+pp (NTIMES n e)    = "NTIMES\n" ++ show n ++ " " ++ pp e ++ "\n"
 
 ppz :: Zipper -> String
 ppz (Zipper r ct) = "ZIP\n" ++ indent (pp r:[ppctx ct])
 
 ppctx :: Context -> String
 ppctx TopC = "Top\n"
-ppctx (SeqC ct _ el er) = "SEQC\n" ++ indent [ppctx ct]
+ppctx (SeqC ct _ _ _) = "SEQC\n" ++ indent [ppctx ct]
 ppctx (AltC ct) = "ALTC\n" ++ indent [ppctx ct]
-ppctx (StarC ct es e) = "STARC\n" ++ indent [ppctx ct]
-ppctx (RecdC ct e s es) = "RECDC\n" ++ indent [ppctx ct]
+ppctx (StarC ct _ _) = "STARC\n" ++ indent [ppctx ct]
+ppctx (RecdC ct _) = "RECDC\n" ++ indent [ppctx ct]
+ppctx (NTimesC ct _ _ _) = "NTIMESC\n" ++ indent [ppctx ct]

@@ -242,13 +242,10 @@ spec = do
             Z.flatten (Z.ALT [Z.CHAR 'a', Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []]) `shouldBe` ['b', 'c']
 
         it "returns a concatenated list of flattened expressions for STAR" $ do
-            Z.flatten (Z.STAR (Z.ALT [Z.CHAR 'b', Z.CHAR 'c']) [Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []]) `shouldBe` ['b', 'c']
-
-        it "returns a flattened list from the nested expression in RECD" $ property $
-            \r -> Z.flatten (Z.RECD "1" r [Z.SEQ 'a' [Z.SEQ 'b' [], Z.ONE]]) `shouldBe` ['a', 'b']
+            Z.flatten (Z.STAR (Z.ALT [Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []])) `shouldBe` ['b', 'c']
 
         it "correctly flattens deeply nested expressions" $ do
-            Z.flatten (Z.ALT [Z.SEQ 'x' [Z.STAR (Z.CHAR 'z') []], Z.SEQ 'a' [Z.ONE]]) `shouldBe` ['x', 'a']
+            Z.flatten (Z.ALT [Z.SEQ 'x' [Z.STAR (Z.CHAR 'z')], Z.SEQ 'a' [Z.ONE]]) `shouldBe` ['x', 'a']
 
         it "NTIMES inside ALT should allow correct branching" $ do
             let r = Z.ALT [Z.defaultNTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
