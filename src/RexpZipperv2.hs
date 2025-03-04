@@ -28,8 +28,8 @@ instance Ord Exp where
     compare = comparing (unsafePerformIO . readIORef . exp')
 
 instance Eq Exp where
-  (Exp _ e1') == (Exp _ e2') =
-    unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
+  (Exp _ e1') == (Exp _ e2') = e1' == e2'
+    -- unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
 
 {-| ZERO and ONE are not needed in the algorithm because they
   are represented as ALT [] and SEQ [] respectively.
@@ -108,6 +108,39 @@ createExp e' = do
       mem = mRef
       , exp' = eRef
     }
+
+cloneAndCreate :: Exp -> IO Exp
+cloneAndCreate e = do 
+  e' <- (readIORef . exp') e
+  eCloned' <- cloneExp' e'
+  createExp eCloned'
+
+cloneExp' :: Exp' -> IO Exp'
+cloneExp' (CHAR c) = return (CHAR c)
+cloneExp' (SEQ s []) = return (SEQ s [])
+cloneExp' (ALT []) = return (ALT [])
+cloneExp' (SEQ s es) = do
+  esCloned <- mapM cloneAndCreate es
+  return (SEQ s esCloned)
+cloneExp' (ALT es) = do
+  esCloned <- mapM cloneAndCreate es
+  return (ALT esCloned)
+cloneExp' (STAR e) = do
+  eCloned <- cloneAndCreate e
+  return (STAR eCloned)
+cloneExp' (PLUS e) = do
+  eCloned <- cloneAndCreate e
+  return (PLUS eCloned)
+cloneExp' (OPTIONAL e) = do
+  eCloned <- cloneAndCreate e
+  return (OPTIONAL eCloned)
+cloneExp' (NTIMES n e) = do
+  eCloned <- cloneAndCreate e
+  return (NTIMES n eCloned)
+cloneExp' (RECD s e) = do
+  eCloned <- cloneAndCreate e
+  return (RECD s eCloned)
+cloneExp' (RANGE cs) = return (RANGE cs)
 
 {-| Creates the default Expression and Memory to be
   used in the zipper operations.
@@ -205,14 +238,20 @@ nullable (RANGE _) = False
   We call this function when simplification is deemed unnecessary
   - to avoid excessive pruning.
 -}
-newExp :: Exp' -> IO Exp
-newExp e = do 
+makeExp :: Exp' -> IO Exp
+makeExp e' = do 
   eBott <- eBottom
-  eRef <- newIORef e
+  eRef <- newIORef e'
   let e'' = eBott {
     exp' = eRef
   }
   return e''
+
+newExp :: Exp -> IO Exp
+newExp e = do
+  e' <- readIORef (exp' e)
+  eCloned' <- cloneExp' e' 
+  makeExp eCloned'
 
 {-| The derivation function performed on a zipper
   wrt a character.
@@ -332,14 +371,14 @@ der pos c (Zipper ex me) = up ex me
         up (ALT [e]) m
     up' e (StarC m es e') = do
       let ct = StarC m (e:es) e'
-      e'' <- newExp e'
+      e'' <- makeExp e'
       zs <- down ct e''
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m 
       else return zs
     up' e (PlusC m es e') = do
       let ct = PlusC m (e:es) e'
-      e'' <- newExp e'
+      e'' <- makeExp e'
       zs <- down ct e''
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m
@@ -349,7 +388,7 @@ der pos c (Zipper ex me) = up ex me
     up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
     up' e (NTimesC m n es e') = do
       let ct = NTimesC m (n-1) (e:es) e'
-      e'' <- newExp e'
+      e'' <- makeExp e'
       zs <- down ct e''
       if nullable e' then do
         mBott <- mBottom
@@ -680,6 +719,12 @@ ppe' (SEQ s es)  =  (if null es then "SEQ "++[s] else "SEQ\n" ++ pps es) ++ "\n"
 ppe' (ALT es) = (if null es then "ALT []\n" else "ALT\n"++pps es) ++ "\n"
 ppe' (RANGE cs) = Set.showTreeWith True False cs ++ "\n"
 ppe' (STAR e) = "STAR\n" ++ indent [ppe e]
+ppe' (PLUS e) = "PLUS\n" ++ indent [ppe e]
+ppe' (OPTIONAL e) = "OPTIONAL\n" ++ indent [ppe e]
+ppe' (NTIMES n e) = "NTIMES " ++ show n ++ "\n" ++ indent [ppe e]
+ppe' (RECD s e) = "RECD " ++ s ++ "\n" ++ indent [ppe e]
+
+
 ppz :: Zipper -> String
 ppz (Zipper e' m) = "ZIP\n" ++ indent (ppe' e':[ppm m])
 
@@ -697,3 +742,8 @@ ppctx :: Context -> String
 ppctx TopC = "TOP\n"
 ppctx (SeqC m _ _ _) = "SEQC\n" ++ indent [ppm m]
 ppctx (AltC m) = "ALTC\n" ++ indent [ppm m]
+ppctx (StarC m es e) = "STARC\n" ++ indent [ppm m]
+ppctx (PlusC m es e) = "PLUSC\n" ++ indent [ppm m]
+ppctx (OptionalC m es) = "OPTIONALC\n" ++ indent [ppm m]
+ppctx (NTimesC m n es e) = "NTIMESC " ++ show n ++ "\n" ++ indent [ppm m]
+ppctx (RecdC m s) = "RECDC " ++ s ++ "\n" ++ indent [ppm m]

@@ -35,19 +35,26 @@ whitespace = (" " <|> "\n" <|> "\t" <|> "\r") RexpZipperv2.+> ()
 identifier :: IO Exp
 identifier = do
     ls <- lett
+    letts <- newExp ls
     ds <- digit
-    ls <~> (("_" <|> ls <|> ds) RexpZipperv2.*> ())
+    digits <- newExp ds
+    ls <~> (("_" <|> letts <|> digits) RexpZipperv2.*> ())
 
 numbers :: IO Exp
-numbers = "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipperv2.*> ()))
+numbers = do
+    "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipperv2.*> ()))
 
 string :: IO Exp
 string = do
     sms <- sym
+    syms <- newExp sms
     ds <- digit
+    digits <- newExp ds
     ps <- parens
+    paren <- newExp ps
     ws <- whitespace
-    "\"" <~> ((sms <|> ds <|> ps <|> ws <|> "\n") RexpZipperv2.*> ()) <~> "\""
+    wsps <- newExp ws
+    "\"" <~> ((syms <|> digits <|> paren <|> wsps <|> "\n") RexpZipperv2.*> ()) <~> "\""
 
 eol :: IO Exp
 eol = "\n" <|> "\r\n"
@@ -55,31 +62,44 @@ eol = "\n" <|> "\r\n"
 comment :: IO Exp
 comment = do
     sms <- sym
+    syms <- newExp sms
     ds <- digit
+    digits <- newExp ds
     ps <- parens
+    paren <- newExp ps
     e <- eol
-    "//" <~> ((sms <|> ps <|> ds <|> toExp " " RexpZipperv2.*> ()) RexpZipperv2.*> ()) <~> e
+    eols <- newExp e
+    "//" <~> ((syms <|> paren <|> digits <|> toExp " " RexpZipperv2.*> ()) RexpZipperv2.*> ()) <~> eols
 
 whileRegs :: IO Exp
 whileRegs = do
     kw <- keyword
+    kws <- newExp kw
     o <- op
+    os <- newExp o
     str <- string
+    strs <- newExp str
     p <- parens
+    ps <- newExp p
     s <- semi
+    sc <- newExp s
     w <- whitespace
+    ws <- newExp w
     i <- identifier
+    ids <- newExp i
     n <- numbers
+    ns <- newExp n
     c <- comment
-    (("k" RexpZipperv2.<$> kw)
-        <|> ("o" RexpZipperv2.<$> o)
-        <|> ("str" RexpZipperv2.<$> str)
-        <|> ("p" RexpZipperv2.<$> p)
-        <|> ("s" RexpZipperv2.<$> s)
-        <|> ("w" RexpZipperv2.<$> w)
-        <|> ("i" RexpZipperv2.<$> i)
-        <|> ("n" RexpZipperv2.<$> n)
-        <|> ("c" RexpZipperv2.<$> c)) RexpZipperv2.*> ()
+    cs <- newExp c
+    (("k" RexpZipperv2.<$> kws)
+        <|> ("o" RexpZipperv2.<$> os)
+        <|> ("str" RexpZipperv2.<$> strs)
+        <|> ("p" RexpZipperv2.<$> ps)
+        <|> ("s" RexpZipperv2.<$> sc)
+        <|> ("w" RexpZipperv2.<$> ws)
+        <|> ("i" RexpZipperv2.<$> ids)
+        <|> ("n" RexpZipperv2.<$> ns)
+        <|> ("c" RexpZipperv2.<$> cs)) RexpZipperv2.*> ()
 
 
 tokenise :: [Char] -> IO [Token]
