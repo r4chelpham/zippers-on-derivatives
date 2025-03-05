@@ -28,8 +28,8 @@ instance Ord Exp where
     compare = comparing (unsafePerformIO . readIORef . exp')
 
 instance Eq Exp where
-  (Exp _ e1') == (Exp _ e2') = e1' == e2'
-    -- unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
+  (Exp _ e1') == (Exp _ e2') = 
+    unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
 
 {-| ZERO and ONE are not needed in the algorithm because they
   are represented as ALT [] and SEQ [] respectively.
@@ -50,7 +50,7 @@ data Context = TopC
             | AltC Mem -- Alternate has one context shared between its children
             | StarC Mem [Exp] Exp'
             | PlusC Mem [Exp] Exp'
-            | OptionalC Mem [Exp]
+            | OptionalC Mem
             | NTimesC Mem Int [Exp] Exp'
             | RecdC Mem [Char]
             deriving (Ord, Eq, Show)
@@ -310,11 +310,11 @@ der pos c (Zipper ex me) = up ex me
         case es of
           [] -> do
             writeIORef (parents m') [AltC m]
-            down (SeqC m' s [] es) e
+            down (SeqC m' s [] []) e
           (el:esr) -> do
             writeIORef (parents m') [AltC m]
             z1 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            z2 <- down (SeqC m' s [] esr) el 
+            z2 <- down (SeqC m' s [el] esr) el 
             -- ^ Parse as if the first part matched the empty string...
             return (z1 ++ z2)
       else do
@@ -327,11 +327,35 @@ der pos c (Zipper ex me) = up ex me
         ) [] es
     down' m (STAR e) = do
       e' <- readIORef (exp' e)
-      down (StarC m [] e') e
+      zs <- down (StarC m [] e') e
+      if null zs then up (SEQ '\0' []) m
+      else return zs
+      -- e'' <- makeExp e'
+      -- zs1 <- down (StarC m [] e') e
+      -- mBott <- mBottom
+      -- let m' = mBott {
+      --   start = start m
+      -- }
+      -- writeIORef (parents m') [AltC m]
+      -- zs2 <- down (StarC m' [] e') e''
+      -- return (zs1 ++ zs2)
     down' m (PLUS e) = do
       e' <- readIORef (exp' e)
       down (PlusC m [] e') e
-    down' m (OPTIONAL e) = down (OptionalC m []) e
+    down' m (OPTIONAL e) = do
+      zs <- down (OptionalC m) e
+      if null zs then up (SEQ '\0' []) m
+      else return zs
+      -- e' <- readIORef (exp' e)
+      -- e'' <- makeExp e'
+      -- zs1 <- down (OptionalC m) e
+      -- mBott <- mBottom
+      -- let m' = mBott {
+      --   start = start m
+      -- }
+      -- writeIORef (parents m') [AltC m]
+      -- zs2 <- down (OptionalC m') e''
+      -- return (zs1 ++ zs2)
     down' _ (NTIMES 0 _) = return [] 
     down' m (NTIMES n e) = do
       e' <- readIORef (exp' e)
@@ -383,7 +407,7 @@ der pos c (Zipper ex me) = up ex me
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m
       else return zs
-    up' e (OptionalC m es) = up (SEQ '\0' (reverse (e:es))) m
+    up' e (OptionalC m) = up (SEQ '\0' [e]) m
     -- ^ up' on this case is called on a successful first-time match.
     up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
     up' e (NTimesC m n es e') = do
@@ -449,7 +473,8 @@ matcher es = not (null es)
   so there is no need to match any other Exp'
 -}
 flatten :: Exp' -> IO [Char]
-flatten (SEQ s []) = return [s]
+flatten (SEQ s []) = do
+  if s == '\0' then return [] else return [s]
 flatten (SEQ _ es) = do
   es' <- concatMapM getExp' es
   concatMapM flatten es'
@@ -744,6 +769,6 @@ ppctx (SeqC m _ _ _) = "SEQC\n" ++ indent [ppm m]
 ppctx (AltC m) = "ALTC\n" ++ indent [ppm m]
 ppctx (StarC m es e) = "STARC\n" ++ indent [ppm m]
 ppctx (PlusC m es e) = "PLUSC\n" ++ indent [ppm m]
-ppctx (OptionalC m es) = "OPTIONALC\n" ++ indent [ppm m]
+ppctx (OptionalC m) = "OPTIONALC\n" ++ indent [ppm m]
 ppctx (NTimesC m n es e) = "NTIMESC " ++ show n ++ "\n" ++ indent [ppm m]
 ppctx (RecdC m s) = "RECDC " ++ s ++ "\n" ++ indent [ppm m]

@@ -65,7 +65,7 @@ spec = do
             es <- Z.run "" e
             Z.matcher es `shouldBe` True
 
-        it "matches a SEQ containing a STAR (1)" $ do
+        it "matches a SEQ containing a STAR at the beginning (1)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.STAR a)
@@ -73,7 +73,7 @@ spec = do
             es <- Z.run "b" e
             Z.matcher es `shouldBe` True
 
-        it "matches a SEQ containing a STAR (2)" $ do
+        it "matches a SEQ containing a STAR at the beginning (2)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.STAR a)
@@ -81,7 +81,7 @@ spec = do
             es <- Z.run "ab" e
             Z.matcher es `shouldBe` True
         
-        it "matches a SEQ containing a STAR (3)" $ do
+        it "matches a SEQ containing a STAR at the beginning (3)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.STAR a)
@@ -89,12 +89,45 @@ spec = do
             es <- Z.run "" e
             Z.matcher es `shouldBe` False
 
-        it "matches a SEQ containing a STAR (4)" $ do
+        it "matches a SEQ containing a STAR at the beginning (4)" $ do
             a <- Z.createExp (Z.CHAR 'a')
             b <- Z.createExp (Z.CHAR 'b')
             e1 <- Z.createExp (Z.STAR a)
             e <- Z.createExp (Z.SEQ '\0' [e1,b])
             es <- Z.run "aaaaab" e
+            Z.matcher es `shouldBe` True
+
+
+        it "matches a SEQ containing a STAR at the end (1)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [b,e1])
+            es <- Z.run "b" e
+            Z.matcher es `shouldBe` True
+
+        it "matches a SEQ containing a STAR at the end (2)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [b,e1])
+            es <- Z.run "ba" e
+            Z.matcher es `shouldBe` True
+        
+        it "matches a SEQ containing a STAR at the end (3)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [b,e1])
+            es <- Z.run "" e
+            Z.matcher es `shouldBe` False
+
+        it "matches a SEQ containing a STAR at the end (4)" $ do
+            a <- Z.createExp (Z.CHAR 'a')
+            b <- Z.createExp (Z.CHAR 'b')
+            e1 <- Z.createExp (Z.STAR a)
+            e <- Z.createExp (Z.SEQ '\0' [b,e1])
+            es <- Z.run "baaaaaaa" e
             Z.matcher es `shouldBe` True
 
         it "matches a SEQ containing a PLUS (1)" $ do
@@ -340,7 +373,7 @@ spec = do
             a <- Z.createExp (Z.CHAR 'a')
             e' <- Z.createExp (Z.STAR a)
             e <- Z.createExp (Z.PLUS e')
-            es <- Z.run "a" e
+            es <- Z.run "b" e
             Z.matcher es `shouldBe` True
 
         it "matches an PLUS of a STAR to 0 or more repetitions of itself (3)" $ do

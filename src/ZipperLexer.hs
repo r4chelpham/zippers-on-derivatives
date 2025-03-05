@@ -18,7 +18,10 @@ lett :: IO Exp
 lett = toExp (RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z']))
 
 sym :: IO Exp
-sym = lett <|> RANGE (Set.fromList ['.', '_', ';', ',', '\\', ':'])
+sym = do
+    l <- lett
+    ls <- newExp l
+    ls <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
 parens :: IO Exp
 parens = toExp (RANGE $ Set.fromList ['(', ')', '{', '}'])

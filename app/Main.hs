@@ -1,4 +1,4 @@
-import ZipperLexer(whileRegs)
+import ZipperLexer
 import RexpZipperv2
 import System.IO
 
@@ -9,10 +9,9 @@ main = do
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
     print fileContent
-    -- tokens <- ZipperLexer.tokenise fileContent
-    ws <- whileRegs
-    es <- run fileContent ws
-    print es
-
+    -- ws <- whileRegs
+    tokens <- ZipperLexer.tokenise fileContent
+    -- es <- run fileContent ws
+    print tokens
 
 
