@@ -217,20 +217,30 @@ focus e = do
 {-| Determines whether the expression given is able
   to match the empty string or not.
 -}
-nullable :: Exp' -> Bool
-nullable (CHAR _) = False
-nullable (ALT es) =
-  any (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
-nullable (SEQ _ []) = True
-nullable (SEQ _ es) =
-  all (\(Exp _ e') -> nullable (unsafePerformIO (readIORef e'))) es
-nullable (STAR _) =  True
-nullable (PLUS (Exp _ e')) = nullable (unsafePerformIO (readIORef e')) 
-nullable (OPTIONAL _) = True
-nullable (NTIMES 0 _) = True
-nullable (NTIMES _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
-nullable (RECD _ (Exp _ e')) = nullable (unsafePerformIO (readIORef e'))
-nullable (RANGE _) = False
+nullable :: Exp' -> IO Bool
+nullable (CHAR _) = return False
+nullable (ALT es) = do
+  es' <- concatMapM getExp' es
+  res <- mapM nullable es'
+  return (or res)
+nullable (SEQ _ []) = return True
+nullable (SEQ _ es) = do
+  es' <- concatMapM getExp' es
+  res <- mapM nullable es'
+  return (and res)
+nullable (STAR _) =  return True
+nullable (PLUS (Exp _ e)) = do
+  e' <- readIORef e
+  nullable e'
+nullable (OPTIONAL _) = return True
+nullable (NTIMES 0 _) = return True
+nullable (NTIMES _ (Exp _ e)) = do
+  e' <- readIORef e
+  nullable e'
+nullable (RECD _ (Exp _ e)) = do
+  e' <- readIORef e
+  nullable e'
+nullable (RANGE _) = return False
 
 {- | Mainly used for when we need to pass down a new reference to 
   an exp to evaluate it a number of times (STAR, PLUS, NTIMES)
@@ -306,17 +316,18 @@ der pos c (Zipper ex me) = up ex me
         start = start m
       }
       e' <- readIORef (exp' e)
-      if nullable e' then do
+      nu <- nullable e'
+      if nu then do
         case es of
           [] -> do
             writeIORef (parents m') [AltC m]
-            down (SeqC m' s [] []) e
+            down (SeqC m' s [] es) e
           (el:esr) -> do
             writeIORef (parents m') [AltC m]
-            z1 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            z2 <- down (SeqC m' s [el] esr) el 
+            zs1 <- down (SeqC m' s [] es) e -- | Parse as normal...
+            zs2 <- down (SeqC m' s [el] esr) el 
             -- ^ Parse as if the first part matched the empty string...
-            return (z1 ++ z2)
+            return (zs1 ++ zs2)
       else do
         writeIORef (parents m') [AltC m]
         down (SeqC m' s [] es) e
@@ -327,35 +338,11 @@ der pos c (Zipper ex me) = up ex me
         ) [] es
     down' m (STAR e) = do
       e' <- readIORef (exp' e)
-      zs <- down (StarC m [] e') e
-      if null zs then up (SEQ '\0' []) m
-      else return zs
-      -- e'' <- makeExp e'
-      -- zs1 <- down (StarC m [] e') e
-      -- mBott <- mBottom
-      -- let m' = mBott {
-      --   start = start m
-      -- }
-      -- writeIORef (parents m') [AltC m]
-      -- zs2 <- down (StarC m' [] e') e''
-      -- return (zs1 ++ zs2)
+      down (StarC m [] e') e
     down' m (PLUS e) = do
       e' <- readIORef (exp' e)
       down (PlusC m [] e') e
-    down' m (OPTIONAL e) = do
-      zs <- down (OptionalC m) e
-      if null zs then up (SEQ '\0' []) m
-      else return zs
-      -- e' <- readIORef (exp' e)
-      -- e'' <- makeExp e'
-      -- zs1 <- down (OptionalC m) e
-      -- mBott <- mBottom
-      -- let m' = mBott {
-      --   start = start m
-      -- }
-      -- writeIORef (parents m') [AltC m]
-      -- zs2 <- down (OptionalC m') e''
-      -- return (zs1 ++ zs2)
+    down' m (OPTIONAL e) = down (OptionalC m) e
     down' _ (NTIMES 0 _) = return [] 
     down' m (NTIMES n e) = do
       e' <- readIORef (exp' e)
@@ -381,7 +368,14 @@ der pos c (Zipper ex me) = up ex me
     up' :: Exp -> Context -> IO [Zipper]
     up' _ TopC = return []
     up' e (SeqC m s es []) = up (SEQ s (reverse (e:es))) m
-    up' e (SeqC m s el (er:esr)) = down (SeqC m s (e:el) esr) er
+    up' e (SeqC m s el (er:esr)) = do
+      er' <- readIORef (exp' er)
+      nu <- nullable er'
+      if nu then do
+        zs <- down (SeqC m s (e:el) esr) er
+        if null zs then up (SEQ '\0' (reverse(e:el))) m
+        else return zs
+      else down (SeqC m s (e:el) esr) er
     up' e (AltC m) = do
       if pos == end m then do
         res <- readIORef (result m)
@@ -407,14 +401,17 @@ der pos c (Zipper ex me) = up ex me
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m
       else return zs
-    up' e (OptionalC m) = up (SEQ '\0' [e]) m
+    up' e (OptionalC m) = do
+      e' <- readIORef (exp' e)
+      up e' m
     -- ^ up' on this case is called on a successful first-time match.
     up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
     up' e (NTimesC m n es e') = do
       let ct = NTimesC m (n-1) (e:es) e'
       e'' <- makeExp e'
       zs <- down ct e''
-      if nullable e' then do
+      nu <- nullable e'
+      if nu then do
         mBott <- mBottom
         let m' = mBott {
           start = start m
@@ -441,7 +438,8 @@ ders pos (c:cs) zs = do
 run :: [Char] -> Exp -> IO [Exp]
 run [] e = do
   e' <- readIORef (exp' e)
-  if nullable e' then do
+  nu <- nullable e'
+  if nu then do
     z@(Zipper _ m) <- focus e
     ps <- readIORef (parents m)
     let (SeqC m' s _ _) = head ps

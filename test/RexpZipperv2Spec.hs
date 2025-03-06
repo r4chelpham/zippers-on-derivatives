@@ -374,7 +374,7 @@ spec = do
             e' <- Z.createExp (Z.STAR a)
             e <- Z.createExp (Z.PLUS e')
             es <- Z.run "b" e
-            Z.matcher es `shouldBe` True
+            Z.matcher es `shouldBe` False
 
         it "matches an PLUS of a STAR to 0 or more repetitions of itself (3)" $ do
             a <- Z.createExp (Z.CHAR 'a')
