@@ -1,6 +1,5 @@
 import ZipperLexer
 import RexpZipperv2
-import System.IO
 
 main :: IO ()
 main = do
@@ -8,7 +7,7 @@ main = do
     filename <- getLine
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
-    print fileContent
+    putStrLn fileContent
     -- ws <- whileRegs
     tokens <- ZipperLexer.tokenise fileContent
     -- es <- run fileContent ws

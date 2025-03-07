@@ -48,10 +48,10 @@ data Exp' = CHAR Char
 data Context = TopC
             | SeqC Mem Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Mem -- Alternate has one context shared between its children
-            | StarC Mem [Exp] Exp'
-            | PlusC Mem [Exp] Exp'
+            | StarC Mem [Exp] Exp
+            | PlusC Mem [Exp] Exp
             | OptionalC Mem
-            | NTimesC Mem Int [Exp] Exp'
+            | NTimesC Mem Int [Exp] Exp
             | RecdC Mem [Char]
             deriving (Ord, Eq, Show)
 
@@ -325,7 +325,7 @@ der pos c (Zipper ex me) = up ex me
           (el:esr) -> do
             writeIORef (parents m') [AltC m]
             zs1 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            zs2 <- down (SeqC m' s [el] esr) el 
+            zs2 <- down (SeqC m' s [e] esr) el 
             -- ^ Parse as if the first part matched the empty string...
             return (zs1 ++ zs2)
       else do
@@ -337,16 +337,13 @@ der pos c (Zipper ex me) = up ex me
         return (acc ++ zs)
         ) [] es
     down' m (STAR e) = do
-      e' <- readIORef (exp' e)
-      down (StarC m [] e') e
+      down (StarC m [] e) e
     down' m (PLUS e) = do
-      e' <- readIORef (exp' e)
-      down (PlusC m [] e') e
+      down (PlusC m [] e) e
     down' m (OPTIONAL e) = down (OptionalC m) e
     down' _ (NTIMES 0 _) = return [] 
     down' m (NTIMES n e) = do
-      e' <- readIORef (exp' e)
-      down (NTimesC m (n-1) [] e') e
+      down (NTimesC m (n-1) [] e) e
     down' m (RECD s e) = do
       down (RecdC m s) e
     down' m (RANGE cs)
@@ -389,15 +386,15 @@ der pos c (Zipper ex me) = up ex me
         up (ALT [e]) m
     up' e (StarC m es e') = do
       let ct = StarC m (e:es) e'
-      e'' <- makeExp e'
-      zs <- down ct e''
+      -- e'' <- makeExp e'
+      zs <- down ct e'
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m 
       else return zs
     up' e (PlusC m es e') = do
       let ct = PlusC m (e:es) e'
-      e'' <- makeExp e'
-      zs <- down ct e''
+      -- e'' <- makeExp e'
+      zs <- down ct e'
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m
       else return zs
@@ -408,9 +405,10 @@ der pos c (Zipper ex me) = up ex me
     up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
     up' e (NTimesC m n es e') = do
       let ct = NTimesC m (n-1) (e:es) e'
-      e'' <- makeExp e'
-      zs <- down ct e''
-      nu <- nullable e'
+      -- e'' <- makeExp e'
+      e'' <- readIORef (exp' e')
+      zs <- down ct e'
+      nu <- nullable e''
       if nu then do
         mBott <- mBottom
         let m' = mBott {
