@@ -543,17 +543,17 @@ spec = do
             es <- Z.run "a" e
             Z.matcher es `shouldBe` False
         
-        it "matches nullable NTIMES in a SEQ (2)" $ do
+        it "matches nullable NTIMES in a SEQ (3)" $ do
             e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
             es <- Z.run "aa" e
             Z.matcher es `shouldBe` True
 
-        it "matches nullable NTIMES in a SEQ (3)" $ do
+        it "matches nullable NTIMES in a SEQ (4)" $ do
             e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
             es <- Z.run "aaa" e
             Z.matcher es `shouldBe` True
 
-        it "matches nullable NTIMES in a SEQ (4)" $ do
+        it "matches nullable NTIMES in a SEQ (5)" $ do
             e <- (("a" Z.?> ()) Z.^> 2) Z.<~> ("a" Z.^> 2)
             es <- Z.run "aaaa" e
             Z.matcher es `shouldBe` True

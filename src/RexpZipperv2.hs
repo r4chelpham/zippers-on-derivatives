@@ -70,6 +70,7 @@ data Mem = Mem
   }
 
 instance Eq Mem where
+  (==) :: Mem -> Mem -> Bool
   (Mem s1 e1 ps1 r1) == (Mem s2 e2 ps2 r2) =
     s1 == s2 &&
     e1 == e2 &&
@@ -317,19 +318,17 @@ der pos c (Zipper ex me) = up ex me
       }
       e' <- readIORef (exp' e)
       nu <- nullable e'
+      writeIORef (parents m') [AltC m]
       if nu then do
         case es of
           [] -> do
-            writeIORef (parents m') [AltC m]
             down (SeqC m' s [] es) e
           (el:esr) -> do
-            writeIORef (parents m') [AltC m]
-            zs1 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            zs2 <- down (SeqC m' s [e] esr) el 
+            zs1 <- down (SeqC m' s [e] esr) el
             -- ^ Parse as if the first part matched the empty string...
+            zs2 <- down (SeqC m' s [] es) e -- | Parse as normal...
             return (zs1 ++ zs2)
       else do
-        writeIORef (parents m') [AltC m]
         down (SeqC m' s [] es) e
     down' m (ALT es) =
       foldM (\acc e -> do
@@ -368,11 +367,12 @@ der pos c (Zipper ex me) = up ex me
     up' e (SeqC m s el (er:esr)) = do
       er' <- readIORef (exp' er)
       nu <- nullable er'
-      if nu then do
-        zs <- down (SeqC m s (e:el) esr) er
-        if null zs then up (SEQ '\0' (reverse(e:el))) m
-        else return zs
-      else down (SeqC m s (e:el) esr) er
+      zs <- down (SeqC m s (e:el) esr) er
+      if nu && null zs then do
+        case esr of
+          [] -> up (SEQ '\0' (reverse(e:el))) m
+          err:errs -> up' err (SeqC m s (er:e:el) errs)
+      else return zs
     up' e (AltC m) = do
       if pos == end m then do
         res <- readIORef (result m)
@@ -386,14 +386,12 @@ der pos c (Zipper ex me) = up ex me
         up (ALT [e]) m
     up' e (StarC m es e') = do
       let ct = StarC m (e:es) e'
-      -- e'' <- makeExp e'
       zs <- down ct e'
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m 
       else return zs
     up' e (PlusC m es e') = do
       let ct = PlusC m (e:es) e'
-      -- e'' <- makeExp e'
       zs <- down ct e'
       if null zs then do
         up (SEQ '\0' (reverse (e:es))) m
@@ -405,7 +403,6 @@ der pos c (Zipper ex me) = up ex me
     up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
     up' e (NTimesC m n es e') = do
       let ct = NTimesC m (n-1) (e:es) e'
-      -- e'' <- makeExp e'
       e'' <- readIORef (exp' e')
       zs <- down ct e'
       nu <- nullable e''
@@ -415,7 +412,8 @@ der pos c (Zipper ex me) = up ex me
           start = start m
         }
         writeIORef (parents m') [AltC m]
-        zs' <- down (NTimesC m' (n-1) es e') e
+        emptyStr <- makeExp (SEQ '\0' [])
+        zs' <- up' emptyStr ct
         {- ^ Similar to the nullable case for SEQ , we have to check
           whether NTIMES can "skip" one iteration (i.e. it matches 
           the empty string. -}
