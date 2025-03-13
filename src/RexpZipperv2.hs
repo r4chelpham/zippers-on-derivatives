@@ -10,6 +10,7 @@ import Control.Monad (foldM)
 import Data.Ord (comparing)
 import Data.List (intercalate)
 import qualified Data.Set as Set
+import GHC.ResponseFile (escapeArgs)
 
 type Sym = Char
 
@@ -110,39 +111,6 @@ createExp e' = do
       , exp' = eRef
     }
 
-cloneAndCreate :: Exp -> IO Exp
-cloneAndCreate e = do 
-  e' <- (readIORef . exp') e
-  eCloned' <- cloneExp' e'
-  createExp eCloned'
-
-cloneExp' :: Exp' -> IO Exp'
-cloneExp' (CHAR c) = return (CHAR c)
-cloneExp' (SEQ s []) = return (SEQ s [])
-cloneExp' (ALT []) = return (ALT [])
-cloneExp' (SEQ s es) = do
-  esCloned <- mapM cloneAndCreate es
-  return (SEQ s esCloned)
-cloneExp' (ALT es) = do
-  esCloned <- mapM cloneAndCreate es
-  return (ALT esCloned)
-cloneExp' (STAR e) = do
-  eCloned <- cloneAndCreate e
-  return (STAR eCloned)
-cloneExp' (PLUS e) = do
-  eCloned <- cloneAndCreate e
-  return (PLUS eCloned)
-cloneExp' (OPTIONAL e) = do
-  eCloned <- cloneAndCreate e
-  return (OPTIONAL eCloned)
-cloneExp' (NTIMES n e) = do
-  eCloned <- cloneAndCreate e
-  return (NTIMES n eCloned)
-cloneExp' (RECD s e) = do
-  eCloned <- cloneAndCreate e
-  return (RECD s eCloned)
-cloneExp' (RANGE cs) = return (RANGE cs)
-
 {-| Creates the default Expression and Memory to be
   used in the zipper operations.
 
@@ -207,10 +175,8 @@ focus :: Exp -> IO Zipper
 focus e = do
     mTop <- mBottom
     writeIORef (parents mTop) [TopC]
-    expEnd <- eBottom
-    writeIORef (exp' expEnd) (CHAR '\0')
     let e' = SEQ '\0' []
-    let root = SeqC mTop '\0' [] [e, expEnd]
+    let root = SeqC mTop '\0' [] [e]
     mSeq <- mBottom
     writeIORef (parents mSeq) [root]
     return (Zipper e' mSeq)
@@ -258,11 +224,13 @@ makeExp e' = do
   }
   return e''
 
-newExp :: Exp -> IO Exp
-newExp e = do
-  e' <- readIORef (exp' e)
-  eCloned' <- cloneExp' e' 
-  makeExp eCloned'
+workList :: IORef [Zipper]
+{-# NOINLINE workList #-}
+workList = unsafePerformIO $ newIORef []
+
+tops :: IORef [Exp]
+{-# NOINLINE tops #-}
+tops = unsafePerformIO $ newIORef []
 
 {-| The derivation function performed on a zipper
   wrt a character.
@@ -284,10 +252,10 @@ newExp e = do
   IO [Zipper] - A list of zippers with the result 
     of derivation.
 -}
-der ::  Int -> Char -> Zipper -> IO [Zipper]
+der ::  Int -> Char -> Zipper -> IO ()
 der pos c (Zipper ex me) = up ex me
     where
-    down :: Context -> Exp -> IO [Zipper]
+    down :: Context -> Exp -> IO ()
     down ct e = do
       m <- readIORef (mem e)
       res <- readIORef (result m)
@@ -295,7 +263,7 @@ der pos c (Zipper ex me) = up ex me
         modifyIORef (parents m) (++ [ct])
         if pos == end m
           then up' res ct
-        else return []
+        else return ()
       else do
         mBott <- mBottom
         let newMem = mBott {
@@ -306,10 +274,11 @@ der pos c (Zipper ex me) = up ex me
         e' <- readIORef (exp' e)
         down' newMem e'
 
-    down' :: Mem -> Exp' -> IO [Zipper]
+    down' :: Mem -> Exp' -> IO ()
     down' m (CHAR d)
-        | c == d = return [Zipper (SEQ c []) m]
-        | otherwise = return []
+        | c == d = do
+          modifyIORef workList (++ [Zipper (SEQ c []) m]) 
+        | otherwise = return ()
     down' m r@(SEQ _ []) = up r m
     down' m (SEQ s (e:es)) = do
       mBott <- mBottom
@@ -317,39 +286,36 @@ der pos c (Zipper ex me) = up ex me
         start = start m
       }
       e' <- readIORef (exp' e)
-      nu <- nullable e'
+      -- nu <- nullable e'
       writeIORef (parents m') [AltC m]
-      if nu then do
-        case es of
-          [] -> do
-            down (SeqC m' s [] es) e
-          (el:esr) -> do
-            zs1 <- down (SeqC m' s [e] esr) el
-            -- ^ Parse as if the first part matched the empty string...
-            zs2 <- down (SeqC m' s [] es) e -- | Parse as normal...
-            return (zs1 ++ zs2)
-      else do
-        down (SeqC m' s [] es) e
-    down' m (ALT es) =
-      foldM (\acc e -> do
-        zs <- down (AltC m) e
-        return (acc ++ zs)
-        ) [] es
-    down' m (STAR e) = do
-      down (StarC m [] e) e
-    down' m (PLUS e) = do
-      down (PlusC m [] e) e
-    down' m (OPTIONAL e) = down (OptionalC m) e
-    down' _ (NTIMES 0 _) = return [] 
-    down' m (NTIMES n e) = do
-      down (NTimesC m (n-1) [] e) e
-    down' m (RECD s e) = do
-      down (RecdC m s) e
-    down' m (RANGE cs)
-      | Set.member c cs = return [Zipper (SEQ c []) m]
-      | otherwise = return []
+      -- if nu then do
+      --   case es of
+      --     [] -> do
+      --       down (SeqC m' s [] es) e
+      --     (el:esr) -> do
+      --       zs1 <- down (SeqC m' s [e] esr) el
+      --       -- ^ Parse as if the first part matched the empty string...
+      --       zs2 <- down (SeqC m' s [] es) e -- | Parse as normal...
+      --       return (zs1 ++ zs2)
+      -- else do
+      down (SeqC m' s [] es) e
+    down' m (ALT es) = mapM_ (down (AltC m)) es
+    -- down' m (STAR e) = do
+    --   down (StarC m [] e) e
+    -- down' m (PLUS e) = do
+    --   down (PlusC m [] e) e
+    -- down' m (OPTIONAL e) = down (OptionalC m) e
+    -- down' _ (NTIMES 0 _) = return [] 
+    -- down' m (NTIMES n e) = do
+    --   down (NTimesC m (n-1) [] e) e
+    -- down' m (RECD s e) = do
+    --   down (RecdC m s) e
+    -- down' m (RANGE cs)
+    --   | Set.member c cs = return [Zipper (SEQ c []) m]
+    --   | otherwise = return []
+    down' _ _ = return ()
 
-    up :: Exp' -> Mem -> IO [Zipper]
+    up :: Exp' -> Mem -> IO ()
     up e' m = do
       e <- eBottom
       writeIORef (exp' e) e'
@@ -359,102 +325,129 @@ der pos c (Zipper ex me) = up ex me
       writeIORef (mem e) newMem
       writeIORef (result m) e
       ps <- readIORef (parents m)
-      concatMapM (up' e) ps
+      mapM_ (up' e) ps
 
-    up' :: Exp -> Context -> IO [Zipper]
-    up' _ TopC = return []
+    up' :: Exp -> Context -> IO ()
+    up' e TopC = do
+      modifyIORef tops (++ [e])
     up' e (SeqC m s es []) = up (SEQ s (reverse (e:es))) m
     up' e (SeqC m s el (er:esr)) = do
-      er' <- readIORef (exp' er)
-      nu <- nullable er'
-      zs <- down (SeqC m s (e:el) esr) er
-      if nu && null zs then do
-        case esr of
-          [] -> up (SEQ '\0' (reverse(e:el))) m
-          err:errs -> up' err (SeqC m s (er:e:el) errs)
-      else return zs
+      -- er' <- readIORef (exp' er)
+      -- nu <- nullable er'
+      down (SeqC m s (e:el) esr) er
+      -- if nu && null zs then do
+      --   case esr of
+      --     [] -> up (SEQ '\0' (reverse(e:el))) m
+      --     err:errs -> up' err (SeqC m s (e:el) errs)
+      -- else return zs
     up' e (AltC m) = do
       if pos == end m then do
         res <- readIORef (result m)
         e' <- readIORef (exp' res)
         case e' of
           (ALT es) -> do
-            _ <- writeIORef (exp' res) (ALT (es ++ [e]))
-            return []
+            writeIORef (exp' res) (ALT (es ++ [e]))
           _ -> error "Not an ALT "
-      else do
-        up (ALT [e]) m
-    up' e (StarC m es e') = do
-      let ct = StarC m (e:es) e'
-      zs <- down ct e'
-      if null zs then do
-        up (SEQ '\0' (reverse (e:es))) m 
-      else return zs
-    up' e (PlusC m es e') = do
-      let ct = PlusC m (e:es) e'
-      zs <- down ct e'
-      if null zs then do
-        up (SEQ '\0' (reverse (e:es))) m
-      else return zs
-    up' e (OptionalC m) = do
-      e' <- readIORef (exp' e)
-      up e' m
-    -- ^ up' on this case is called on a successful first-time match.
-    up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
-    up' e (NTimesC m n es e') = do
-      let ct = NTimesC m (n-1) (e:es) e'
-      e'' <- readIORef (exp' e')
-      zs <- down ct e'
-      nu <- nullable e''
-      if nu then do
-        mBott <- mBottom
-        let m' = mBott {
-          start = start m
-        }
-        writeIORef (parents m') [AltC m]
-        emptyStr <- makeExp (SEQ '\0' [])
-        zs' <- up' emptyStr ct
-        {- ^ Similar to the nullable case for SEQ , we have to check
-          whether NTIMES can "skip" one iteration (i.e. it matches 
-          the empty string. -}
-        return (zs' ++ zs)
-      else return zs
-    up' e (RecdC m s) = up (RECD s e) m
+      else up (ALT [e]) m
+    up' _ _ = return ()
+    -- up' e (StarC m es e') = do
+    --   let ct = StarC m (e:es) e'
+    --   zs <- down ct e'
+    --   if null zs then do
+    --     up (SEQ '\0' (reverse (e:es))) m 
+    --   else return zs
+    -- up' e (PlusC m es e') = do
+    --   let ct = PlusC m (e:es) e'
+    --   zs <- down ct e'
+    --   if null zs then do
+    --     up (SEQ '\0' (reverse (e:es))) m
+    --   else return zs
+    -- up' e (OptionalC m) = do
+    --   e' <- readIORef (exp' e)
+    --   up e' m
+    -- -- ^ up' on this case is called on a successful first-time match.
+    -- up' e (NTimesC m 0 es _) = up (SEQ '\0' (reverse (e:es))) m
+    -- up' e (NTimesC m n es e') = do
+    --   let ct = NTimesC m (n-1) (e:es) e'
+    --   e'' <- readIORef (exp' e')
+    --   zs <- down ct e'
+    --   nu <- nullable e''
+    --   if nu then do
+    --     mBott <- mBottom
+    --     let m' = mBott {
+    --       start = start m
+    --     }
+    --     writeIORef (parents m') [AltC m]
+    --     emptyStr <- makeExp (SEQ '\0' [])
+    --     zs' <- up' emptyStr ct
+    --     {- ^ Similar to the nullable case for SEQ , we have to check
+    --       whether NTIMES can "skip" one iteration (i.e. it matches 
+    --       the empty string. -}
+    --     return (zs' ++ zs)
+    --   else return zs
+    -- up' e (RecdC m s) = up (RECD s e) m
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat Prelude.<$> mapM f xs
 
-ders :: Int -> [Char] -> [Zipper] -> IO [Zipper]
-ders pos [] zs = do
-  concatMapM (der pos '\0') zs
-ders pos (c:cs) zs = do
-    newZs <- concatMapM (der pos c) zs
-    ders (pos + 1) cs newZs
+-- ders :: Int -> [Char] -> [Zipper] -> IO [Zipper]
+-- ders pos [] zs = do
+--   concatMapM (der pos '\0') zs
+-- ders pos (c:cs) zs = do
+--     newZs <- concatMapM (der pos c) zs
+--     ders (pos + 1) cs newZs
 
-run :: [Char] -> Exp -> IO [Exp]
-run [] e = do
-  e' <- readIORef (exp' e)
-  nu <- nullable e'
-  if nu then do
-    z@(Zipper _ m) <- focus e
-    ps <- readIORef (parents m)
-    let (SeqC m' s _ _) = head ps
-    -- ^ ps will never be empty on a newly focused zipper.
-    writeIORef (exp' e) (SEQ '\0' [])
-    writeIORef (parents m) [SeqC m' s [e] []]
-    res <- unwrapTopZipper z
-    return [res]
-  else return []
-run s e = do
-  z <- focus e
-  zs <- ders 0 s [z]
-  mapM unwrapTopZipper zs
+-- run :: [Char] -> Exp -> IO [Exp]
+-- run [] e = do
+--   e' <- readIORef (exp' e)
+--   nu <- nullable e'
+--   if nu then do
+--     z@(Zipper _ m) <- focus e
+--     ps <- readIORef (parents m)
+--     let (SeqC m' s _ _) = head ps
+--     -- ^ ps will never be empty on a newly focused zipper.
+--     writeIORef (exp' e) (SEQ '\0' [])
+--     writeIORef (parents m) [SeqC m' s [e] []]
+--     res <- unwrapTopZipper z
+--     return [res]
+--   else return []
+-- run s e = do
+--   z <- focus e
+--   zs <- ders 0 s [z]
+--   mapM unwrapTopZipper zs
 
 {-| Takes a list of Exp derived from the `run` function
   and returns whether the operation was successful or not.
 -}
 matcher :: [Exp] -> Bool
 matcher es = not (null es)
+
+unwrapTopExp :: Exp -> IO Exp
+unwrapTopExp e = do
+  e' <- readIORef (exp' e)
+  case e' of
+    (SEQ _ es@(_:_)) -> return (last es)
+    _ -> error "Invalid top exp" 
+
+run :: [Char] -> Exp -> IO [Exp]
+run s e = do
+  z <- focus e
+  writeIORef workList [z]
+  run' 0 s
+
+run' :: Int -> [Char] -> IO [Exp]
+run' pos s = do
+  ws <- readIORef workList
+  writeIORef workList []
+  writeIORef tops []
+  case s of
+    [] -> do
+      mapM_ (der pos '\0') ws
+      ts <- readIORef tops
+      mapM unwrapTopExp ts
+    (c:cs) -> do
+      mapM_ (der pos c) ws
+      run' (pos + 1) cs
 
 {-| Flattens an Exp' into a String.
 

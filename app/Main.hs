@@ -9,8 +9,8 @@ main = do
     fileContent <- readFile filePath
     putStrLn fileContent
     -- ws <- whileRegs
-    tokens <- ZipperLexer.tokenise fileContent
+    -- tokens <- ZipperLexer.tokenise fileContent
     -- es <- run fileContent ws
-    print tokens
+    -- print tokens
 
 

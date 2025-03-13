@@ -105,13 +105,13 @@ whileRegs = do
         <|> ("n" RexpZipperv2.<$> n)) RexpZipperv2.*> ()
 
 
-tokenise :: [Char] -> IO [Token]
-tokenise s = do
-    whiles <- whileRegs
-    es <- run s whiles
-    es' <- mapM (readIORef . exp') es
-    esLexed <- concatMapM env es'
-    return (map token $ filter isNotWhitespace esLexed)
-  where isNotWhitespace ("w", _) = False
-        isNotWhitespace ("c", _) = False
-        isNotWhitespace _ = True
+-- tokenise :: [Char] -> IO [Token]
+-- tokenise s = do
+--     whiles <- whileRegs
+--     es <- run s whiles
+--     es' <- mapM (readIORef . exp') es
+--     esLexed <- concatMapM env es'
+--     return (map token $ filter isNotWhitespace esLexed)
+--   where isNotWhitespace ("w", _) = False
+--         isNotWhitespace ("c", _) = False
+--         isNotWhitespace _ = True
