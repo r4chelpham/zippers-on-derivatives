@@ -165,13 +165,13 @@ computeValue zs rs =
     ]
 
 tokenise :: State a -> [Char] -> IO [a]
-tokenise init input = do
+tokenise qinit input = do
     tokens <- newIORef []
     let emit t = modifyIORef tokens (++ [t])
         process :: [Char] -> IO ()
         process [] = return ()
         process s@(_:cs) = do
-            (bestAction, bestLen) <- findBestAction init s 0 Nothing 0
+            (bestAction, bestLen) <- findBestAction qinit s 0 Nothing 0
             case bestAction of
                 Just action -> do
                     let (tokenised, remaining) = splitAt bestLen s
@@ -196,6 +196,7 @@ findBestAction state (c:cs) currentLen bestAction bestLen
                 action@(Just _) -> (action, newLen)
         findBestAction newState cs newLen (fst newBest) (snd newBest)
 
+{- Override emit and content for WHILE Language tokens -}
 emit :: t -> ActionContext t -> IO ()
 emit token ctx = ctxemit ctx token
 
