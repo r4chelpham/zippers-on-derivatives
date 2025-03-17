@@ -6,7 +6,7 @@ data Token = T_KEYWORD String
             | T_PAREN String
             | T_SEMI
             | T_ID String
-            | T_NUM String deriving (Show)
+            | T_NUM String deriving (Show, Eq)
 
 token :: ([Char], [Char]) -> Token
 token ("k", s) = T_KEYWORD s

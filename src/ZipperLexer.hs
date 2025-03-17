@@ -20,7 +20,6 @@ lett = toExp (RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z']))
 sym :: IO Exp
 sym = do
     l <- lett
-    -- ls <- newExp l
     l <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
 parens :: IO Exp
@@ -38,10 +37,8 @@ whitespace = (" " <|> "\n" <|> "\t" <|> "\r") RexpZipperv2.+> ()
 identifier :: IO Exp
 identifier = do
     ls <- lett
-    -- letts <- newExp ls
     ds <- digit
-    -- digits <- newExp ds
-    ls <~> (("_" <|> ls <|> ds) RexpZipperv2.*> ())
+    RANGE (Set.fromList (['A'..'Z'] ++ ['a'..'z'])) <~> (("_" <|> ls <|> ds) RexpZipperv2.*> ())
 
 numbers :: IO Exp
 numbers = do
@@ -50,13 +47,9 @@ numbers = do
 string :: IO Exp
 string = do
     sms <- sym
-    -- syms <- newExp sms
     ds <- digit
-    -- digits <- newExp ds
     ps <- parens
-    -- paren <- newExp ps
     ws <- whitespace
-    -- wsps <- newExp ws
     "\"" <~> ((sms <|> ds <|> ps <|> ws <|> "\n") RexpZipperv2.*> ()) <~> "\""
 
 eol :: IO Exp
@@ -65,35 +58,22 @@ eol = "\n" <|> "\r\n"
 comment :: IO Exp
 comment = do
     sms <- sym
-    -- syms <- newExp sms
     ds <- digit
-    -- digits <- newExp ds
     ps <- parens
-    -- paren <- newExp ps
     e <- eol
-    -- eols <- newExp e
     "//" <~> ((sms <|> ps <|> ds <|> toExp " " RexpZipperv2.*> ()) RexpZipperv2.*> ()) <~> e
 
 whileRegs :: IO Exp
 whileRegs = do
     kw <- keyword
-    -- kws <- newExp kw
     o <- op
-    -- os <- newExp o
     str <- string
-    -- strs <- newExp str
     p <- parens
-    -- ps <- newExp p
     s <- semi
-    -- sc <- newExp s
     w <- whitespace
-    -- ws <- newExp w
     i <- identifier
-    -- ids <- newExp i
     n <- numbers
-    -- ns <- newExp n
     c <- comment
-    -- cs <- newExp c
     (("k" RexpZipperv2.<$> kw)
         <|> ("c" RexpZipperv2.<$> c)
         <|> ("o" RexpZipperv2.<$> o)
@@ -104,14 +84,41 @@ whileRegs = do
         <|> ("i" RexpZipperv2.<$> i)
         <|> ("n" RexpZipperv2.<$> n)) RexpZipperv2.*> ()
 
+-- whileRegs :: IO [Exp]
+-- whileRegs = do
+--     kw <- keyword
+--     o <- op
+--     str <- string
+--     p <- parens
+--     s <- semi
+--     w <- whitespace
+--     i <- identifier
+--     n <- numbers
+--     c <- comment
+--     return [kw, o, str, p, s, w, i, n, c]
 
--- tokenise :: [Char] -> IO [Token]
--- tokenise s = do
---     whiles <- whileRegs
---     es <- run s whiles
---     es' <- mapM (readIORef . exp') es
---     esLexed <- concatMapM env es'
---     return (map token $ filter isNotWhitespace esLexed)
---   where isNotWhitespace ("w", _) = False
---         isNotWhitespace ("c", _) = False
---         isNotWhitespace _ = True
+-- tokenise :: Int -> [Char] -> IO [Token]
+-- tokenise pos s = do
+--     ws <- whileRegs -- | The rules that we need to match the input to
+
+
+tokenise :: [Char] -> IO [Token]
+tokenise s = do
+    whiles <- whileRegs
+    es <- run s whiles
+    es' <- mapM (readIORef . exp') es
+    esLexed <- concatMapM env es'
+    return (map token $ filter isNotWhitespace esLexed)
+  where isNotWhitespace ("w", _) = False
+        isNotWhitespace ("c", _) = False
+        isNotWhitespace _ = True
+
+tokenise' :: Exp -> [Char] -> IO [Token]
+tokenise' e s = do
+    es <- run s e
+    es' <- mapM (readIORef . exp') es
+    esLexed <- concatMapM env es'
+    return (map token $ filter isNotWhitespace esLexed)
+  where isNotWhitespace ("w", _) = False
+        isNotWhitespace ("c", _) = False
+        isNotWhitespace _ = True
