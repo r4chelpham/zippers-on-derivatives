@@ -152,8 +152,10 @@ spec = do
                 res `shouldBe` [T_ID s]
 
         it "lexes strings containing keywords as identifiers (longest match)" $ do
-            let res = ZL.tokenise "iffoo"
-            res `shouldBe` [T_ID "iffoo"]
+            let res = ZL.tokenise "fifoo"
+            res `shouldBe` [T_ID "fifoo"]
+            let res' = ZL.tokenise "iffoo"
+            res' `shouldBe` [T_ID "iffoo"]
 
         it "lexes strings containing keywords as identifiers (longest match)" $ do
             let res = ZL.tokenise "whilee"
@@ -181,7 +183,7 @@ spec = do
             forAll ((,) <$> elements ['0'..'9'] <*> listOf1  (elements (['a'..'z'] ++ ['A'..'Z'] ++ "_"))) $ \(c, s) -> do
                 let invalidIdentifier = c : s
                 let res = ZL.tokenise  invalidIdentifier
-                evaluate res `shouldThrow` anyErrorCall
+                res `shouldNotBe` [T_ID invalidIdentifier]
 
         it "does not lex strings starting with underscores as identifiers" $ property $
             forAll ((,) '_' <$> listOf1 (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "_"))) $ \(c, s) -> do

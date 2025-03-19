@@ -84,23 +84,6 @@ whileRegs = do
         <|> ("i" RexpZipperv2.<$> i)
         <|> ("n" RexpZipperv2.<$> n)) RexpZipperv2.*> ()
 
--- whileRegs :: IO [Exp]
--- whileRegs = do
---     kw <- keyword
---     o <- op
---     str <- string
---     p <- parens
---     s <- semi
---     w <- whitespace
---     i <- identifier
---     n <- numbers
---     c <- comment
---     return [kw, o, str, p, s, w, i, n, c]
-
--- tokenise :: Int -> [Char] -> IO [Token]
--- tokenise pos s = do
---     ws <- whileRegs -- | The rules that we need to match the input to
-
 
 tokenise :: [Char] -> IO [Token]
 tokenise s = do
