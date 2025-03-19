@@ -134,26 +134,24 @@ der c (Zipper re ctx) = up re ctx
     down ct (NTIMES n e) =
         let e' = NTIMES (n-1) e
             ctt = SeqC ct '\0' [] [e']
-        in down ctt e'
+        in down ctt e
     down ct (RECD s r') = down (RecdC ct s) r'
 
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
     up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
     up e (SeqC ct s el (er:esr)) = 
-        if nullable er then
+        let zs = down (SeqC ct s (e:el) esr) er
+        in if nullable er then
             case esr of
                 (err:esrs) -> 
-                    let zs = down (SeqC ct s (e:el) esr) er  
-                        zs' = down (SeqC ct s (e:el) esrs) err
+                    let zs' = down (SeqC ct s (e:el) esrs) err
                     in (zs ++ zs')
                 [] -> 
-                    let zs = down (SeqC ct s (e:el) esr) er
-                    in 
-                        if null zs then 
-                            up e (SeqC ct s el esr)
-                        else zs
-        else down (SeqC ct s (e:el) esr) er
+                    if null zs then 
+                        up e (SeqC ct s el esr)
+                    else zs
+        else zs
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r) =
         let zs = down (StarC ct (e:es) r) r in
