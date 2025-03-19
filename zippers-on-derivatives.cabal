@@ -34,6 +34,7 @@ library
       TreeZipper
       Val
       ZipperLexer
+      ZipperLexerv2
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:
@@ -77,6 +78,7 @@ test-suite zippers-on-derivatives-test
       RexpZipperv2Spec
       ValSpec
       ZipperLexerSpec
+      ZipperLexerv2Spec
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives

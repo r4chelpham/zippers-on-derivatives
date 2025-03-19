@@ -1,124 +1,75 @@
 module ZipperLexer where
 
-import RexpZipperv2
+import RexpZipper
 import Token
 import qualified Data.Set as Set
-import GHC.IORef
 
-{- WHILE Language registers -}
-keyword :: IO Exp
+{- WHILE Language registers - NOTE: doesn't work rn -}
+keyword :: Exp
 keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|>
           "to" <|> "true" <|> "false" <|> "read" <|> "write" <|>
           "skip" <|> "break"
 
-op :: IO Exp
+op :: Exp
 op = ">" <|> "<" <|> "==" <|> "!=" <|> "<=" <|> ">=" <|> ":=" <|> "&&" <|> "||" <|> "+" <|> "-" <|> "*" <|> "%" <|> "/"
 
-lett :: IO Exp
-lett = toExp (RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z']))
+lett :: Exp
+lett = RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z'])
 
-sym :: IO Exp
-sym = do
-    l <- lett
-    l <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
+sym :: Exp
+sym = lett <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
-parens :: IO Exp
-parens = toExp (RANGE $ Set.fromList ['(', ')', '{', '}'])
+parens :: Exp
+parens = RANGE $ Set.fromList ['(', ')', '{', '}']
 
-digit :: IO Exp
-digit = toExp (RANGE $ Set.fromList ['0'..'9'])
+digit :: Exp
+digit = RANGE $ Set.fromList ['0'..'9']
 
-semi :: IO Exp
+semi :: Exp
 semi = toExp ";"
 
-whitespace :: IO Exp
-whitespace = (" " <|> "\n" <|> "\t" <|> "\r") RexpZipperv2.+> ()
+whitespace :: Exp
+whitespace = (" " <|> "\n" <|> "\t" <|> "\r") RexpZipper.+> ()
 
-identifier :: IO Exp
-identifier = do
-    ls <- lett
-    ds <- digit
-    RANGE (Set.fromList (['A'..'Z'] ++ ['a'..'z'])) <~> (("_" <|> ls <|> ds) RexpZipperv2.*> ())
+identifier :: Exp
+identifier = lett <~> (("_" <|> lett <|> digit) RexpZipper.*> ())
 
-numbers :: IO Exp
-numbers = do
-    "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipperv2.*> ()))
+numbers :: Exp
+numbers = "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipper.*> ()))
 
-string :: IO Exp
-string = do
-    sms <- sym
-    ds <- digit
-    ps <- parens
-    ws <- whitespace
-    "\"" <~> ((sms <|> ds <|> ps <|> ws <|> "\n") RexpZipperv2.*> ()) <~> "\""
+string :: Exp
+string = "\"" <~> ((sym <|> digit <|> parens <|> whitespace <|> "\n") RexpZipper.*> ()) <~> "\""
 
-eol :: IO Exp
+eol :: Exp
 eol = "\n" <|> "\r\n"
 
-comment :: IO Exp
-comment = do
-    sms <- sym
-    ds <- digit
-    ps <- parens
-    e <- eol
-    "//" <~> ((sms <|> ps <|> ds <|> toExp " " RexpZipperv2.*> ()) RexpZipperv2.*> ()) <~> e
+comment :: Exp
+comment = "//" <~> ((sym <|> parens <|> digit <|> toExp " " RexpZipper.*> ()) RexpZipper.*> ()) <~> eol
 
-whileRegs :: IO Exp
-whileRegs = do
-    kw <- keyword
-    o <- op
-    str <- string
-    p <- parens
-    s <- semi
-    w <- whitespace
-    i <- identifier
-    n <- numbers
-    c <- comment
-    (("k" RexpZipperv2.<$> kw)
-        <|> ("c" RexpZipperv2.<$> c)
-        <|> ("o" RexpZipperv2.<$> o)
-        <|> ("str" RexpZipperv2.<$> str)
-        <|> ("p" RexpZipperv2.<$> p)
-        <|> ("s" RexpZipperv2.<$> s)
-        <|> ("w" RexpZipperv2.<$> w)
-        <|> ("i" RexpZipperv2.<$> i)
-        <|> ("n" RexpZipperv2.<$> n)) RexpZipperv2.*> ()
+whileRegs :: Exp
+whileRegs = (("k" RexpZipper.<$> keyword)
+            <|> ("c" RexpZipper.<$> comment)    
+            <|> ("o" RexpZipper.<$> op)
+            <|> ("str" RexpZipper.<$> string)
+            <|> ("p" RexpZipper.<$> parens)
+            <|> ("s" RexpZipper.<$> semi)
+            <|> ("w" RexpZipper.<$> whitespace)
+            <|> ("i" RexpZipper.<$> identifier)
+            <|> ("n" RexpZipper.<$> numbers)) RexpZipper.*> ()
 
--- whileRegs :: IO [Exp]
--- whileRegs = do
---     kw <- keyword
---     o <- op
---     str <- string
---     p <- parens
---     s <- semi
---     w <- whitespace
---     i <- identifier
---     n <- numbers
---     c <- comment
---     return [kw, o, str, p, s, w, i, n, c]
+-- whileRegs :: Exp
+-- whileRegs = (("k" Z.<$> Z.keyword)
+--             Z.<|> ("o" Z.<$> Z.op)
+--             Z.<|> ("str" Z.<$> Z.string)
+--             Z.<|> ("p" Z.<$> Z.parens)
+--             Z.<|> ("s" Z.<$> Z.semi)
+--             Z.<|> ("w" Z.<$> Z.whitespace)
+--             Z.<|> ("i" Z.<$> Z.identifier)
+--             Z.<|> ("n" Z.<$> Z.numbers)
+--             Z.<|> ("c" Z.<$> Z.comment)) Z.*> ()
 
--- tokenise :: Int -> [Char] -> IO [Token]
--- tokenise pos s = do
---     ws <- whileRegs -- | The rules that we need to match the input to
-
-
-tokenise :: [Char] -> IO [Token]
-tokenise s = do
-    whiles <- whileRegs
-    es <- run s whiles
-    es' <- mapM (readIORef . exp') es
-    esLexed <- concatMapM env es'
-    return (map token $ filter isNotWhitespace esLexed)
-  where isNotWhitespace ("w", _) = False
-        isNotWhitespace ("c", _) = False
-        isNotWhitespace _ = True
-
-tokenise' :: Exp -> [Char] -> IO [Token]
-tokenise' e s = do
-    es <- run s e
-    es' <- mapM (readIORef . exp') es
-    esLexed <- concatMapM env es'
-    return (map token $ filter isNotWhitespace esLexed)
+tokenise :: String -> [Token]
+tokenise s = map token $ filter isNotWhitespace $ head $ lexSimp s whileRegs
   where isNotWhitespace ("w", _) = False
         isNotWhitespace ("c", _) = False
         isNotWhitespace _ = True
