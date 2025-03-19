@@ -123,29 +123,37 @@ der c (Zipper re ctx) = up re ctx
         if nullable e then
             case es of
                 [] -> down (SeqC ct s [] es) e
-                (el:esr) ->
+                (er:esr) ->
                     let z1 = down (SeqC ct s [] es) e
-                        z2 = down (SeqC ct s [] esr) el
+                        z2 = down (SeqC ct s [] esr) er
                     in z1 ++ z2
-        else down (SeqC ct s [e] es) e
+        else down (SeqC ct s [] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct (STAR e) = 
-    {- ^ Fails on cases like (a*)*b because it has no way 
-    of remembering the previous match. -}
-        let zs = down (StarC ct [] e) e in
-            if null zs then
-                up e ct
-            else zs   
+    down ct (STAR e) = down (StarC ct [] e) e  
     down ct r@(NTIMES 0 _) = up r ct
     down ct (NTIMES n e) =
-        let ctt = NTimesC ct (n-1) [] e
-        in down ctt e
+        let e' = NTIMES (n-1) e
+            ctt = SeqC ct '\0' [] [e']
+        in down ctt e'
     down ct (RECD s r') = down (RecdC ct s) r'
 
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
     up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
-    up e (SeqC ct s el (er:esr)) = down (SeqC ct s (e:el) esr) er
+    up e (SeqC ct s el (er:esr)) = 
+        if nullable er then
+            case esr of
+                (err:esrs) -> 
+                    let zs = down (SeqC ct s (e:el) esr) er  
+                        zs' = down (SeqC ct s (e:el) esrs) err
+                    in (zs ++ zs')
+                [] -> 
+                    let zs = down (SeqC ct s (e:el) esr) er
+                    in 
+                        if null zs then 
+                            up e (SeqC ct s el esr)
+                        else zs
+        else down (SeqC ct s (e:el) esr) er
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r) =
         let zs = down (StarC ct (e:es) r) r in
@@ -206,15 +214,13 @@ isNullable (RecdC ct _) = isNullable ct
 
     TODO: fix this
 -}
-lexing :: [Char] -> Exp -> Exp
+lexing :: [Char] -> Exp -> [Exp]
 lexing cs e =
     let zs = getNullableZippers (ders cs [focus (simp e)]) in
-        if not (null zs) && length zs == 1 then
-            head (map (\(Zipper r' ct) -> getExpFromZipper (plug r' ct)) zs)
-        else error "Could not lex"
+        map (\(Zipper r' ct) -> getExpFromZipper (plug r' ct)) zs
 
-lexSimp :: [Char] -> Exp -> [([Char], [Char])]
-lexSimp s r = env $ lexing s r
+lexSimp :: [Char] -> Exp -> [[([Char], [Char])]]
+lexSimp s r = map env (lexing s r)
 
 getExpFromZipper :: Zipper -> Exp
 getExpFromZipper (Zipper r _) = r
@@ -330,7 +336,7 @@ lett :: Exp
 lett = RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z'])
 
 sym :: Exp
-sym = lett <|> RANGE (Set.fromList ['.', '_', ';', ',', '\\', ':'])
+sym = lett <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
 parens :: Exp
 parens = RANGE $ Set.fromList ['(', ')', '{', '}']
@@ -361,14 +367,14 @@ comment = "//" <~> ((sym <|> parens <|> digit <|> toExp " " RexpZipper.*> ()) Re
 
 whileRegs :: Exp
 whileRegs = (("k" RexpZipper.<$> keyword)
+            <|> ("c" RexpZipper.<$> comment)    
             <|> ("o" RexpZipper.<$> op)
             <|> ("str" RexpZipper.<$> string)
             <|> ("p" RexpZipper.<$> parens)
             <|> ("s" RexpZipper.<$> semi)
             <|> ("w" RexpZipper.<$> whitespace)
             <|> ("i" RexpZipper.<$> identifier)
-            <|> ("n" RexpZipper.<$> numbers)
-            <|> ("c" RexpZipper.<$> comment)) RexpZipper.*> ()
+            <|> ("n" RexpZipper.<$> numbers)) RexpZipper.*> ()
 
 -- whileRegs :: Exp
 -- whileRegs = (("k" Z.<$> Z.keyword)
@@ -382,7 +388,7 @@ whileRegs = (("k" RexpZipper.<$> keyword)
 --             Z.<|> ("c" Z.<$> Z.comment)) Z.*> ()
 
 tokenise :: String -> [Token]
-tokenise s = map token $ filter isNotWhitespace $ lexSimp s whileRegs
+tokenise s = map token $ filter isNotWhitespace $ head $ lexSimp s whileRegs
   where isNotWhitespace ("w", _) = False
         isNotWhitespace ("c", _) = False
         isNotWhitespace _ = True
