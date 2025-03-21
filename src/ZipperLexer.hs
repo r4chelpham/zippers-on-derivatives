@@ -3,6 +3,8 @@ module ZipperLexer where
 import RexpZipper
 import Token
 import qualified Data.Set as Set
+import Data.Foldable (maximumBy, minimumBy)
+import Data.Ord (comparing)
 
 {- WHILE Language registers - NOTE: doesn't work rn -}
 keyword :: Exp
@@ -48,7 +50,7 @@ comment = "//" <~> ((sym <|> parens <|> digit <|> toExp " " RexpZipper.*> ()) Re
 
 whileRegs :: Exp
 whileRegs = (("k" RexpZipper.<$> keyword)
-            <|> ("c" RexpZipper.<$> comment)    
+            <|> ("c" RexpZipper.<$> comment)
             <|> ("o" RexpZipper.<$> op)
             <|> ("str" RexpZipper.<$> string)
             <|> ("p" RexpZipper.<$> parens)
@@ -69,7 +71,11 @@ whileRegs = (("k" RexpZipper.<$> keyword)
 --             Z.<|> ("c" Z.<$> Z.comment)) Z.*> ()
 
 tokenise :: String -> [Token]
-tokenise s = map token $ filter isNotWhitespace $ head $ lexSimp s whileRegs
-  where isNotWhitespace ("w", _) = False
-        isNotWhitespace ("c", _) = False
-        isNotWhitespace _ = True
+tokenise s =
+  let allResults = lexSimp s whileRegs
+      res = minimumBy (comparing length) allResults
+  in map token $ filter isNotWhitespace res
+  where
+    isNotWhitespace ("w", _) = False
+    isNotWhitespace ("c", _) = False
+    isNotWhitespace _ = True
