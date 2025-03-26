@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Lexer where
 import Rexp
+import Token
 import Val
 import qualified Data.Set as Set
 
@@ -153,24 +154,6 @@ eol = "\n" <|> "\r\n"
 
 comment :: Rexp
 comment = "//" <~> STAR (sym <|> parens <|> digit <|> toRexp " ") <~> eol
-
-data Token = T_KEYWORD String
-            | T_OP String
-            | T_STRING String
-            | T_PAREN String
-            | T_SEMI
-            | T_ID String
-            | T_NUM Integer deriving (Show)
-
-token :: (String, String) -> Token
-token ("k", s) = T_KEYWORD s
-token ("o", s) = T_OP s
-token ("str", s) = T_STRING s
-token ("p", s) = T_PAREN s
-token ("s", _) = T_SEMI
-token ("i", s) = T_ID s
-token ("n", s) = T_NUM (read s :: Integer)
-
 
 whileRegs :: Rexp
 whileRegs = Rexp.STAR (("k" Rexp.<$> keyword)
