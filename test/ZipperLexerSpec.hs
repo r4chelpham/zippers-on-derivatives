@@ -101,7 +101,7 @@ spec = do
 
         it "does not lex invalid keyword 'skip!' (special char)" $ do
             let res = ZL.tokenise  "skip!"
-            evaluate res `shouldThrow` anyErrorCall
+            res `shouldBe` []
 
         it "does not lex invalid keyword 'b_r_e_a_k' (with underscores)" $ do
             let res = ZL.tokenise  "b_r_e_a_k"
@@ -125,7 +125,7 @@ spec = do
         -- | Invalid cases.
         it "does not lex decimals '3.14'" $ do
             let res = ZL.tokenise  "3.14"
-            evaluate res `shouldThrow` anyErrorCall
+            res `shouldBe` []
 
         it "does not lex invalid number '12abc'" $ do
             let res = ZL.tokenise  "12abc"
@@ -133,7 +133,7 @@ spec = do
 
         it "does not lex invalid number '42!'" $ do
             let res = ZL.tokenise  "42!"
-            evaluate res `shouldThrow` anyErrorCall
+            res `shouldBe` []
 
         it "does not lex negative numbers" $ property $
             \(Positive n :: Positive Int) -> do
@@ -175,7 +175,7 @@ spec = do
 
         it "does not lex underscores as identifiers" $ do
             let res = ZL.tokenise  "_"
-            evaluate res `shouldThrow` anyErrorCall
+            res `shouldBe` []
 
         it "" $ do
             let res = ZL.tokenise  "read n;"
@@ -184,14 +184,14 @@ spec = do
         it "does not lex strings starting with numbers as identifiers" $ property $
             forAll ((,) <$> elements ['0'..'9'] <*> listOf1  (elements (['a'..'z'] ++ ['A'..'Z'] ++ "_"))) $ \(c, s) -> do
                 let invalidIdentifier = c : s
-                let res = ZL.tokenise  invalidIdentifier
+                let res = ZL.tokenise invalidIdentifier
                 res `shouldNotBe` [T_ID invalidIdentifier]
 
         it "does not lex strings starting with underscores as identifiers" $ property $
             forAll ((,) '_' <$> listOf1 (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "_"))) $ \(c, s) -> do
                 let invalidIdentifier = c : s
                 let res = ZL.tokenise  invalidIdentifier
-                evaluate res `shouldThrow` anyErrorCall
+                res `shouldBe` []
 
     describe "While language lexing tests" $ do
         describe "Lexer file tests" $ do

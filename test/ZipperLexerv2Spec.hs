@@ -4,6 +4,8 @@ import Test.QuickCheck
 import Test.Hspec
 import qualified ZipperLexerv2 as ZL
 import Token
+import Control.Monad(forM_)
+import Lexer
 
 
 spec :: Spec
@@ -168,6 +170,25 @@ spec = do
         it "" $ do
             res <- ZL.tokenise "read n;"
             res `shouldBe` [T_KEYWORD "read", T_ID "n", T_SEMI]
+
+    describe "While language lexing tests" $ do
+        describe "Lexer file tests" $ do
+            forM_ testFiles $ \filePath -> do
+                it ("lexes " ++ filePath) $ do
+                    fileContent <- readFile ("src/examples/" ++ filePath)
+                    let expected = Lexer.tokenise fileContent
+                    res <- ZL.tokenise fileContent
+                    res `shouldBe` expected
+        where
+            testFiles :: [FilePath]
+            testFiles = 
+                [ "collatz.while"
+                , "fib.while"
+                , "collatz2.while"
+                , "factors.while"
+                , "loops.while"
+                , "primes.while"
+                ]
 
         -- it "does not lex strings starting with numbers as identifiers" $ property $
         --     forAll ((,) <$> elements ['0'..'9'] <*> listOf1 (elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "_"))) $ \(c, s) -> do
