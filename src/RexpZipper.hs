@@ -16,6 +16,8 @@ data Exp = ZERO
             | SEQ Sym [Exp]
             | ALT [Exp]
             | STAR Exp
+            | PLUS Exp
+            | OPTIONAL Exp
             | NTIMES Int Exp -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
             | RECD [Char] Exp
             deriving (Ord, Eq, Show)
@@ -30,20 +32,11 @@ data Exp = ZERO
 defaultSEQ :: [Exp] -> Exp
 defaultSEQ = SEQ '\0'
 
-defaultSTAR :: Exp -> Exp
-defaultSTAR = STAR
+-- defaultPLUS :: Exp -> Exp
+-- defaultPLUS r = defaultSEQ [r, defaultSTAR r]
 
-defaultPLUS :: Exp -> Exp
-defaultPLUS r = defaultSEQ [r, defaultSTAR r]
-
-defaultOPTIONAL :: Exp -> Exp
-defaultOPTIONAL r = ALT [ONE, r]
-
-defaultNTIMES :: Int -> Exp -> Exp
-defaultNTIMES = NTIMES
-
-defaultRECD :: String -> Exp -> Exp
-defaultRECD = RECD
+-- defaultOPTIONAL :: Exp -> Exp
+-- defaultOPTIONAL r = ALT [ONE, r]
 
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
@@ -77,6 +70,8 @@ nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
 nullable (SEQ _ es) = all nullable es
 nullable (STAR _) = True
+nullable (PLUS e) = nullable e
+nullable (OPTIONAL _) = True
 nullable (NTIMES 0 _) = True
 nullable (NTIMES _ r) = nullable r
 nullable (RECD _ r) = nullable r
@@ -129,6 +124,8 @@ der c (Zipper re ctx) = up re ctx
         else down (SeqC ct s [] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
     down ct (STAR e) = down (StarC ct [] e) e  
+    down ct (PLUS e) = down (StarC ct [] e) e  
+    down ct (OPTIONAL e) = down ct e
     down ct r@(NTIMES 0 _) = up r ct
     down ct (NTIMES n e) =
         let e' = NTIMES (n-1) e
@@ -306,19 +303,19 @@ a <|> b =
     (ae, be) -> ALT [ae, be]
 
 (<$>) :: String -> Exp -> Exp
-s <$> r = defaultRECD s r
+s <$> r = RECD s r
 
 (*>) :: ToExp a => a -> b -> Exp
-r *> _ = defaultSTAR (toExp r)
+r *> _ = STAR (toExp r)
 
 (+>) :: ToExp a => a -> b -> Exp
-r +> _ = defaultPLUS (toExp r)
+r +> _ = PLUS (toExp r)
 
 (?>) :: ToExp a => a -> b -> Exp
-r ?> _ = defaultOPTIONAL (toExp r)
+r ?> _ = OPTIONAL (toExp r)
 
 (^>) :: ToExp a => a -> Int -> Exp
-r ^> n = defaultNTIMES n (toExp r)
+r ^> n = NTIMES n (toExp r)
 
 
 -- pretty-printing REGs

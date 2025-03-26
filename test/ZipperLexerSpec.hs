@@ -3,8 +3,10 @@ module ZipperLexerSpec where
 import Test.QuickCheck
 import Test.Hspec
 import qualified ZipperLexer as ZL
+import Lexer
 import Token
 import Control.Exception (evaluate)
+import Control.Monad (forM_)
 
 spec :: Spec
 spec = do
@@ -190,3 +192,22 @@ spec = do
                 let invalidIdentifier = c : s
                 let res = ZL.tokenise  invalidIdentifier
                 evaluate res `shouldThrow` anyErrorCall
+
+    describe "While language lexing tests" $ do
+        describe "Lexer file tests" $ do
+            forM_ testFiles $ \filePath -> do
+                it ("lexes " ++ filePath) $ do
+                    fileContent <- readFile ("src/examples/" ++ filePath)
+                    let expected = Lexer.tokenise fileContent
+                    let res = ZL.tokenise fileContent
+                    res `shouldBe` expected
+        where
+            testFiles :: [FilePath]
+            testFiles = 
+                [ "collatz.while"
+                , "fib.while"
+                , "collatz2.while"
+                , "factors.while"
+                , "loops.while"
+                , "primes.while"
+                ]
