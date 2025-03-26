@@ -89,19 +89,22 @@ tokenise :: [Char] -> IO [Token]
 tokenise s = do
     whiles <- whileRegs
     es <- run s whiles
-    es' <- mapM (readIORef . exp') es
-    esLexed <- concatMapM env es'
-    return (map token $ filter isNotWhitespace esLexed)
+    case es of
+        [] -> return []
+        _ -> do
+            res <- mapM env es
+            let esLexed = head res
+            return (map token $ filter isNotWhitespace esLexed)
   where isNotWhitespace ("w", _) = False
         isNotWhitespace ("c", _) = False
         isNotWhitespace _ = True
 
-tokenise' :: Exp -> [Char] -> IO [Token]
-tokenise' e s = do
-    es <- run s e
-    es' <- mapM (readIORef . exp') es
-    esLexed <- concatMapM env es'
-    return (map token $ filter isNotWhitespace esLexed)
-  where isNotWhitespace ("w", _) = False
-        isNotWhitespace ("c", _) = False
-        isNotWhitespace _ = True
+-- tokenise' :: Exp -> [Char] -> IO [Token]
+-- tokenise' e s = do
+--     es <- run s e
+--     es' <- mapM (readIORef . exp') es
+--     esLexed <- concatMapM env es'
+--     return (map token $ filter isNotWhitespace esLexed)
+--   where isNotWhitespace ("w", _) = False
+--         isNotWhitespace ("c", _) = False
+--         isNotWhitespace _ = True
