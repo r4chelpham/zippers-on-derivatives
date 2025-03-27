@@ -1,4 +1,4 @@
-import ZipperLexer
+import ZipperLexerv2
 
 main :: IO ()
 main = do
@@ -7,7 +7,7 @@ main = do
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
     putStrLn fileContent
-    let tokens = ZipperLexer.tokenise fileContent
+    tokens <- ZipperLexerv2.tokenise fileContent
     -- es <- run fileContent ws
     print tokens
 

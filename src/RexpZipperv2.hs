@@ -292,10 +292,19 @@ der pos c (Zipper ex me) = up ex me
     down' m (STAR e) = down (StarC m [] e) e
     down' m (PLUS e) = down (StarC m [] e) e
     down' m (OPTIONAL e) = down (OptionalC m) e
-    down' m r@(NTIMES 0 _) = return ()
+    down' m r@(NTIMES 0 _) = up r m 
     down' m (NTIMES n e) = do
+      nu <- nullable e
       ne <- createExp (NTIMES (n-1) e)
-      down (SeqC m sBottom [] [ne]) e
+      if nu then do
+        mBott <- mBottom
+        let m' = mBott {
+          start = start m
+        }
+        writeIORef (parents m') [AltC m]
+        down (SeqC m' sBottom [] [ne]) e
+        up (NTIMES (n-1) e) m'
+      else down (SeqC m sBottom [] [ne]) e
     down' m (RECD s e) = down (RecdC m s) e
     down' m (RANGE cs)
       | Set.member c cs = do
@@ -329,8 +338,8 @@ der pos c (Zipper ex me) = up ex me
         res <- readIORef (result m)
         e' <- readIORef (exp' res)
         case e' of
-          (ALT es) -> do
-            writeIORef (exp' res) (ALT (es ++ [e]))
+          (ALT _) -> return () 
+          -- ^ We only take the first successful match of the alternate.
           _ -> error "Not an ALT "
       else up (ALT [e]) m
     up' e (StarC m es e') = do
