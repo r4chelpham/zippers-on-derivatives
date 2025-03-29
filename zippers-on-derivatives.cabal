@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      EdelmannLexer
       EdelmannZipper
       Lexer
       Rexp
@@ -35,6 +36,7 @@ library
       Val
       ZipperLexer
       ZipperLexerv2
+      WhileRegisters
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:
@@ -48,6 +50,7 @@ library
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , memoize >=1.1.2
   default-language: Haskell2010
 
 executable zippers-on-derivatives-exe
@@ -65,6 +68,7 @@ executable zippers-on-derivatives-exe
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , memoize >=1.1.2
     , zippers-on-derivatives
   default-language: Haskell2010
 
@@ -72,6 +76,7 @@ test-suite zippers-on-derivatives-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      EdelmannLexerSpec
       LexerSpec
       RexpSpec
       RexpZipperSpec
@@ -91,5 +96,6 @@ test-suite zippers-on-derivatives-test
     , containers
     , hspec >=2.11.10
     , hspec-discover
+    , memoize >=1.1.2
     , zippers-on-derivatives
   default-language: Haskell2010

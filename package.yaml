@@ -25,6 +25,7 @@ dependencies:
 - hspec >= 2.11.10
 - QuickCheck >= 2.14.3
 - hspec-discover
+- memoize >= 1.1.2
 
 ghc-options:
 - -Wall

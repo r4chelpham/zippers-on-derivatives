@@ -16,4 +16,4 @@ token ("p", s) = T_PAREN s
 token ("s", _) = T_SEMI
 token ("i", s) = T_ID s
 token ("n", s) = T_NUM s
-token _ = error "token was not valid"
+token _ = error "Invalid token"
