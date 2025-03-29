@@ -1,7 +1,4 @@
-import qualified Rexp
-import qualified EdelmannZipper
-import Lexer
-import System.IO
+import qualified EdelmannLexer as L
 
 main :: IO ()
 main = do
@@ -9,9 +6,9 @@ main = do
     filename <- getLine
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
-    print fileContent
-    let tokens = tokenise fileContent
-    print tokens
+    putStrLn fileContent
+    result <- L.tokenise fileContent
+    print result
 
 
 

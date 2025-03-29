@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Rexp where
 
+import Data.Function.Memoize
 import qualified Data.Set as Set
 import Test.QuickCheck
 
@@ -18,8 +20,13 @@ data Rexp = ZERO
             | RANGE (Set.Set Char)
             | PLUS Rexp
             | OPTIONAL Rexp
-            | NTIMES Rexp Int deriving (Show, Eq, Ord)
+            | NTIMES Rexp Int 
+            deriving (Show, Eq, Ord) 
 
+instance Memoizable (Set.Set Char) where
+  memoize f s = memoize (\cs -> f (Set.fromList cs)) (Set.toAscList s)
+
+deriveMemoizable ''Rexp
 -- We define an Arbitrary instance of Rexp for property testing purposes.
 instance Arbitrary Rexp where
   arbitrary = oneof [ return ZERO
@@ -69,6 +76,25 @@ ders r (c:cs) = ders (der r c) cs
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
 
+hasFirst :: Rexp -> Bool
+hasFirst (CHAR _) = True
+hasFirst (ALT r1 r2) = hasFirst r1 || hasFirst r2
+hasFirst (SEQ r1 r2) = (hasFirst r1 && isProductive r2) || (nullable r1 && hasFirst r2)
+hasFirst (STAR r) = hasFirst r 
+hasFirst (PLUS r) = hasFirst r
+hasFirst (OPTIONAL r) = hasFirst r
+hasFirst (RANGE _) = True 
+hasFirst (NTIMES r n) = hasFirst r 
+hasFirst _ = False
+
+isProductive :: Rexp -> Bool
+isProductive r = nullable r || hasFirst r 
+
+stringToRexp :: [Char] -> Rexp
+stringToRexp [] = ONE
+stringToRexp [c] = CHAR c
+stringToRexp (c:cs) = SEQ (CHAR c) (stringToRexp cs)
+
 class ToRexp a where
   toRexp :: a -> Rexp
 
@@ -77,7 +103,7 @@ instance ToRexp Rexp where
   toRexp = id 
 
 instance ToRexp String where
-  toRexp = foldr (SEQ . CHAR) ONE  
+  toRexp = stringToRexp
 
 infixl 6 <~>
 infixl 5 <|>
