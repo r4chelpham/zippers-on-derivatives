@@ -26,6 +26,8 @@ dependencies:
 - QuickCheck >= 2.14.3
 - hspec-discover
 - memoize >= 1.1.2
+- criterion
+- deepseq >= 1.4.8.1
 
 ghc-options:
 - -Wall
@@ -63,3 +65,23 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - zippers-on-derivatives
+
+benchmarks:
+  edelmann:
+    main: app/benchmarks/Edelmann.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives 
+  urban:
+    main: app/benchmarks/Urban.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives 

@@ -1,6 +1,5 @@
 import Criterion.Main
-import qualified EdelmannLexer as L
--- import qualified Lexer as L
+import qualified Lexer as L
 
 main :: IO ()
 main = do
@@ -17,7 +16,7 @@ main = do
   fileContents <- mapM (\f -> readFile (basePath ++ f)) testFiles
 
   let benchmarks = zipWith (\file content ->
-                      bench ("tokenise " ++ file) $ nfIO (L.tokenise content)
+                      bench ("tokenise " ++ file) $ nf L.tokenise content
                     ) testFiles fileContents
 
   defaultMain benchmarks

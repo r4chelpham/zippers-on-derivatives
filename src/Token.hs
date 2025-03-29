@@ -1,4 +1,8 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Token where 
+
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
 
 data Token = T_KEYWORD String
             | T_OP String
@@ -6,7 +10,9 @@ data Token = T_KEYWORD String
             | T_PAREN String
             | T_SEMI
             | T_ID String
-            | T_NUM String deriving (Show, Eq, Ord)
+            | T_NUM String deriving (Show, Eq, Ord, Generic)
+
+instance NFData Token
 
 token :: (String, String) -> Token
 token ("k", s) = T_KEYWORD s

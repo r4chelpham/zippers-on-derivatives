@@ -1,6 +1,5 @@
 import Criterion.Main
 import qualified EdelmannLexer as L
--- import qualified Lexer as L
 
 main :: IO ()
 main = do
