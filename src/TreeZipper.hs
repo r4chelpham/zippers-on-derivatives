@@ -46,9 +46,10 @@ root z@(Zipper _ _) = up z
 
 -- modify the value of the node at some position in the zipper
 modify :: Zipper a -> (a -> a) -> Zipper a
-modify (Zipper (Node x l r) c) f = Zipper (Node (f x) l r) c
-
--- TODO: ask whether it is better to keep the tree you came from traversable when going up?
+modify z@(Zipper n c) f = 
+    case n of
+        (Node x l r) -> Zipper (Node (f x) l r) c
+        Nil -> z
 
 -- function to make traversing the tree more readable
 infixl 1 -:  -- Left-associative, binds loosely so you can chain movements in the zipper L->R

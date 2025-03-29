@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Lexer where
 import Rexp
+import Token
 import Val
 import WhileRegisters
 import Token

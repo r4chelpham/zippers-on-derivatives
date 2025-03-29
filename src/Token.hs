@@ -14,7 +14,7 @@ data Token = T_KEYWORD String
 
 instance NFData Token
 
-token :: (String, String) -> Token
+token :: ([Char], [Char]) -> Token
 token ("k", s) = T_KEYWORD s
 token ("o", s) = T_OP s
 token ("str", s) = T_STRING s

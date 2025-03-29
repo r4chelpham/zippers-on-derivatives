@@ -1,23 +1,14 @@
-import Criterion.Main
-import qualified EdelmannLexer as L
--- import qualified Lexer as L
+import ZipperLexerv2
 
 main :: IO ()
 main = do
-  let basePath = "src/examples/"
-      testFiles = 
-        [ "collatz.while"
-        , "fib.while"
-        , "collatz2.while"
-        , "factors.while"
-        , "loops.while"
-        , "primes.while"
-        ]
+    putStrLn "Enter the filename (without path):"
+    filename <- getLine
+    let filePath = "src/examples/" ++ filename
+    fileContent <- readFile filePath
+    putStrLn fileContent
+    tokens <- ZipperLexerv2.tokenise fileContent
+    -- es <- run fileContent ws
+    print tokens
 
-  fileContents <- mapM (\f -> readFile (basePath ++ f)) testFiles
 
-  let benchmarks = zipWith (\file content ->
-                      bench ("tokenise " ++ file) $ nfIO (L.tokenise content)
-                    ) testFiles fileContents
-
-  defaultMain benchmarks

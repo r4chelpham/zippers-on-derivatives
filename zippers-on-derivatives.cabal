@@ -29,9 +29,13 @@ library
       EdelmannZipper
       Lexer
       Rexp
+      RexpZipper
+      RexpZipperv2
       Token
       TreeZipper
       Val
+      ZipperLexer
+      ZipperLexerv2
       WhileRegisters
   other-modules:
       Paths_zippers_on_derivatives
@@ -79,7 +83,11 @@ test-suite zippers-on-derivatives-test
       EdelmannLexerSpec
       LexerSpec
       RexpSpec
+      RexpZipperSpec
+      RexpZipperv2Spec
       ValSpec
+      ZipperLexerSpec
+      ZipperLexerv2Spec
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
