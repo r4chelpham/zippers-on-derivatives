@@ -1,4 +1,4 @@
-import qualified EdelmannZipper as Z
+import qualified EdelmannLexer as L
 
 main :: IO ()
 main = do
@@ -7,7 +7,7 @@ main = do
     let filePath = "src/examples/" ++ filename
     fileContent <- readFile filePath
     putStrLn fileContent
-    result <- Z.tokenise (Z.build Z.rules) fileContent
+    result <- L.tokenise fileContent
     print result
 
 
