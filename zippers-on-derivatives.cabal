@@ -25,11 +25,14 @@ source-repository head
 
 library
   exposed-modules:
+      EdelmannLexer
       EdelmannZipper
       Lexer
       Rexp
+      Token
       TreeZipper
       Val
+      WhileRegisters
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:
@@ -69,7 +72,7 @@ test-suite zippers-on-derivatives-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      EdelmannZipperSpec
+      EdelmannLexerSpec
       LexerSpec
       RexpSpec
       ValSpec
