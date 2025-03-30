@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Benchmark
       EdelmannLexer
       EdelmannZipper
       Lexer
@@ -34,9 +35,9 @@ library
       Token
       TreeZipper
       Val
+      WhileRegisters
       ZipperLexer
       ZipperLexerv2
-      WhileRegisters
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:
@@ -129,6 +130,46 @@ benchmark edelmann
 benchmark urban
   type: exitcode-stdio-1.0
   main-is: app/benchmarks/Urban.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark zipper-lexer
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/ZipperLexer.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark zipper-lexerv2
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/ZipperLexerv2.hs
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:

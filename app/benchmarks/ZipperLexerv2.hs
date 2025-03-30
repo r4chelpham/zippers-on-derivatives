@@ -1,5 +1,5 @@
 import Benchmark
-import qualified EdelmannLexer as L
+import qualified ZipperLexerv2 as L
 
 main :: IO ()
 main = do

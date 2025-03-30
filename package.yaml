@@ -76,6 +76,7 @@ benchmarks:
       - base >= 4.7 && < 5
       - criterion
       - zippers-on-derivatives 
+  
   urban:
     main: app/benchmarks/Urban.hs
     ghc-options:
@@ -85,3 +86,24 @@ benchmarks:
       - base >= 4.7 && < 5
       - criterion
       - zippers-on-derivatives 
+  
+  zipper-lexer:
+    main: app/benchmarks/ZipperLexer.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives 
+  
+  zipper-lexerv2:
+    main: app/benchmarks/ZipperLexerv2.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
