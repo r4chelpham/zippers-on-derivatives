@@ -1,4 +1,6 @@
 import ZipperLexerv2
+import GHC.IORef
+import RexpZipperv2
 
 main :: IO ()
 main = do
@@ -10,5 +12,5 @@ main = do
     tokens <- ZipperLexerv2.tokenise fileContent
     -- es <- run fileContent ws
     print tokens
-
-
+    c <- readIORef RexpZipperv2.count
+    print c

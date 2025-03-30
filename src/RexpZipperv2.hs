@@ -91,6 +91,11 @@ instance Show Mem where
     show (unsafePerformIO (readIORef res)) ++
     "}"
 
+
+count :: IORef Integer
+{-# NOINLINE count #-}
+count = unsafePerformIO $ newIORef 0
+
 {-| Gives an Exp' an associated memory.
 
   Mainly called when we create an Exp from scratch - 
@@ -271,11 +276,15 @@ der pos c (Zipper ex me) = up ex me
     down' :: Mem -> Exp' -> IO ()
     down' m (CHAR d)
         | c == d = do
+          modifyIORef' count (+1)
           modifyIORef workList (++ [Zipper (SEQ c []) m])
-        | otherwise = return ()
-    down' m r@(SEQ _  []) = up r m
+        | otherwise = modifyIORef' count (+1)
+    down' m r@(SEQ _  []) = do
+        modifyIORef' count (+1)
+        up r m
     down' m (SEQ s (e:es)) = do
       nu <- nullable e
+      modifyIORef' count (+1)
       if nu then do
         mBott <- mBottom
         let m' = mBott {
@@ -288,12 +297,23 @@ der pos c (Zipper ex me) = up ex me
           (er:esr) -> down (SeqC m' s [] esr) er
           -- ^ Parse as if the first part matched the empty string...
       else down (SeqC m s [] es) e
-    down' m (ALT es) = mapM_ (down (AltC m)) es
-    down' m (STAR e) = down (StarC m [] e) e
-    down' m (PLUS e) = down (StarC m [] e) e
-    down' m (OPTIONAL e) = down (OptionalC m) e
-    down' m r@(NTIMES 0 _) = up r m 
+    down' m (ALT es) = do
+      modifyIORef' count (+1)
+      mapM_ (down (AltC m)) es
+    down' m (STAR e) = do
+      modifyIORef' count (+1)
+      down (StarC m [] e) e
+    down' m (PLUS e) = do
+      modifyIORef' count (+1)
+      down (StarC m [] e) e
+    down' m (OPTIONAL e) = do
+      modifyIORef' count (+1)
+      down (OptionalC m) e
+    down' m r@(NTIMES 0 _) = do
+      modifyIORef' count (+1)
+      up r m 
     down' m (NTIMES n e) = do
+      modifyIORef' count (+1)
       nu <- nullable e
       ne <- createExp (NTIMES (n-1) e)
       if nu then do
@@ -305,11 +325,14 @@ der pos c (Zipper ex me) = up ex me
         down (SeqC m' sBottom [] [ne]) e
         up (NTIMES (n-1) e) m'
       else down (SeqC m sBottom [] [ne]) e
-    down' m (RECD s e) = down (RecdC m s) e
+    down' m (RECD s e) = do
+      modifyIORef' count (+1)
+      down (RecdC m s) e
     down' m (RANGE cs)
       | Set.member c cs = do
-          modifyIORef workList (++ [Zipper (SEQ c []) m]) 
-      | otherwise = return ()
+        modifyIORef' count (+1)
+        modifyIORef workList (++ [Zipper (SEQ c []) m]) 
+      | otherwise = modifyIORef' count (+1)
 
     up :: Exp' -> Mem -> IO ()
     up e' m = do
@@ -323,8 +346,11 @@ der pos c (Zipper ex me) = up ex me
     up' :: Exp -> Context -> IO ()
     up' e TopC = do
       modifyIORef tops (++ [e])
-    up' e (SeqC m s es []) = up (SEQ s (reverse (e:es))) m
+    up' e (SeqC m s es []) = do
+      modifyIORef' count (+1)
+      up (SEQ s (reverse (e:es))) m
     up' e (SeqC m s el (er:esr)) = do
+      modifyIORef' count (+1)
       nu <- nullable er
       ws <- readIORef workList
       down (SeqC m s (e:el) esr) er
@@ -338,24 +364,29 @@ der pos c (Zipper ex me) = up ex me
         res <- readIORef (result m)
         e' <- readIORef (exp' res)
         case e' of
-          (ALT _) -> return () 
+          (ALT _) -> modifyIORef' count (+1)
           -- ^ We only take the first successful match of the alternate.
           _ -> error "Not an ALT "
-      else up (ALT [e]) m
+      else do
+        modifyIORef' count (+1)
+        up (ALT [e]) m
     up' e (StarC m es e') = do
       let ct = StarC m (e:es) e'
       ws' <- readIORef workList 
       down ct e'
       ws <- readIORef workList
       if ws == ws' then do
+        modifyIORef' count (+1)
         up (SEQ sBottom (reverse(e:es))) m
       else return ()
     up' e (OptionalC m) = do
       e' <- readIORef (exp' e)
       up e' m
+      modifyIORef' count (+1)
     -- ^ up' on this case is called on a successful first-time match.
-    up' e (RecdC m s) = up (RECD s e) m
-    up' _ _ = return ()
+    up' e (RecdC m s) = do
+      up (RECD s e) m
+      modifyIORef' count (+1)
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat Prelude.<$> mapM f xs
@@ -382,6 +413,7 @@ run s e = do
       nu <- nullable e
       if nu then return [e] else return []
     _ -> do
+      writeIORef count 0
       z <- focus e
       writeIORef workList [z]
       run' 0 s

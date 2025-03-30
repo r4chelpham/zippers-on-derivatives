@@ -107,3 +107,13 @@ benchmarks:
       - criterion
       - zippers-on-derivatives
 
+  load-testing:
+    main: app/benchmarks/LoadTest.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+

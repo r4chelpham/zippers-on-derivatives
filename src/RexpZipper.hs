@@ -6,7 +6,6 @@ import Test.QuickCheck
 import qualified Data.Set as Set
 import Data.List (intercalate)
 
-
 type Sym = Char
 
 data Exp = ZERO
@@ -18,7 +17,7 @@ data Exp = ZERO
             | STAR Exp
             | PLUS Exp
             | OPTIONAL Exp
-            | NTIMES Int Exp -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
+            | NTIMES Int Exp
             | RECD [Char] Exp
             deriving (Ord, Eq, Show)
 
@@ -76,6 +75,7 @@ nullable (NTIMES 0 _) = True
 nullable (NTIMES _ r) = nullable r
 nullable (RECD _ r) = nullable r
 
+
 {-
     Creates a zipper that focuses on 
     the expression.
@@ -123,8 +123,8 @@ der c (Zipper re ctx) = up re ctx
                     in z1 ++ z2
         else down (SeqC ct s [] es) e
     down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct (STAR e) = down (StarC ct [] e) e  
-    down ct (PLUS e) = down (StarC ct [] e) e  
+    down ct (STAR e) = down (StarC ct [] e) e
+    down ct (PLUS e) = down (StarC ct [] e) e
     down ct (OPTIONAL e) = down ct e
     down ct r@(NTIMES 0 _) = up r ct
     down ct (NTIMES n e) =
@@ -136,17 +136,10 @@ der c (Zipper re ctx) = up re ctx
     up :: Exp -> Context -> [Zipper]
     up _ TopC = []
     up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
-    up e (SeqC ct s el (er:esr)) = 
+    up e (SeqC ct s el (er:esr)) =
         let zs = down (SeqC ct s (e:el) esr) er
-        in if nullable er then
-            case esr of
-                (err:esrs) -> 
-                    let zs' = down (SeqC ct s (e:el) esrs) err
-                    in (zs ++ zs')
-                [] -> 
-                    if null zs then 
-                        up e (SeqC ct s el esr)
-                    else zs
+        in if nullable er && null zs then
+            up e (SeqC ct s el esr)
         else zs
     up e (AltC ct) = up (ALT [e]) ct
     up e (StarC ct es r) =
@@ -289,7 +282,7 @@ infixl 3 <|>
 infixl 1 <$>
 
 (<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
-a <~> b = 
+a <~> b =
     case (toExp a, toExp b) of
         (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
         (ae, be) -> defaultSEQ [ae,be]

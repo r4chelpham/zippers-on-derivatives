@@ -4,7 +4,6 @@ import Rexp
 import Token
 import Val
 import WhileRegisters
-import Token
 
 mkeps :: Rexp -> Val
 mkeps ONE = Empty
