@@ -30,7 +30,7 @@ data Exp = ZERO
 -}
 
 defaultSEQ :: [Exp] -> Exp
-defaultSEQ = SEQ '\0'
+defaultSEQ = SEQ sBottom
 
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
@@ -70,13 +70,19 @@ nullable (NTIMES 0 _) = True
 nullable (NTIMES _ r) = nullable r
 nullable (RECD _ r) = nullable r
 
+cBottom :: Char
+cBottom = '\0'
+
+sBottom :: Char
+sBottom = '\0'
+
 {-
     Creates a zipper that focuses on 
     the expression.
 -}
 
 focus :: Exp -> Zipper
-focus r = Zipper (SEQ '\0' []) (SeqC TopC '\0' [] [r, CHAR '\0'])
+focus r = Zipper (SEQ sBottom []) (SeqC TopC sBottom [] [r, CHAR cBottom])
 
 {-
     Derives the result of an Exp from one character:
@@ -123,7 +129,7 @@ der c (Zipper re ctx) = up re ctx
     down ct r@(NTIMES 0 _) = up r ct
     down ct (NTIMES n e) =
         let e' = NTIMES (n-1) e
-            ctt = SeqC ct '\0' [] [e']
+            ctt = SeqC ct sBottom [] [e']
             zs = down ctt e
         in 
             if nullable e then
@@ -151,9 +157,9 @@ der c (Zipper re ctx) = up re ctx
     up e (StarC ct es r) =
         let zs = down (StarC ct (e:es) r) r in
             if null zs then
-                up (STAR (defaultSEQ (reverse (e:es)))) ct
+                up (defaultSEQ (reverse (e:es))) ct
             else zs
-    up e (NTimesC ct 0 es _) = up (NTIMES 0 (defaultSEQ (reverse (e:es)))) ct
+    up e (NTimesC ct 0 es _) = up (defaultSEQ (reverse (e:es))) ct
     up e (NTimesC ctt n es r) =
         if nullable e then
             down (NTimesC ctt (n-1) (e:es) r) r
@@ -171,7 +177,7 @@ der c (Zipper re ctx) = up re ctx
     It then filters all of the zippers that are nullable.
 -}
 ders :: [Char] -> [Zipper] -> [Zipper]
-ders [] zs = concatMap (der '\0') zs
+ders [] zs = concatMap (der cBottom) zs
 ders (c:cs) zs = ders cs (concatMap (der c) zs)
 
 getNullableZippers :: [Zipper] -> [Zipper]
@@ -180,7 +186,7 @@ getNullableZippers = concatMap (\z@(Zipper r' ct) -> ([z | nullable r' && isNull
 matcher :: [Char] -> Exp -> Bool
 matcher [] r = nullable r
 matcher s r =
-    let zs = getNullableZippers (ders s [focus (simp r)]) in
+    let zs = ders s [focus (simp r)] in
         not (null zs)
 
 {- 
@@ -204,8 +210,6 @@ isNullable (RecdC ct _) = isNullable ct
 {-
     Returns the lexed result from taking successive 
     derivatives on the Exp wrt the string.
-
-    TODO: fix this
 -}
 lexing :: [Char] -> Exp -> [Exp]
 lexing cs e = map getExpFromZipper (ders cs [focus e])
@@ -232,10 +236,10 @@ flatten ONE = []
 flatten (CHAR _) = []
 flatten (RANGE _) = []
 flatten (SEQ c [])
-    | c == '\0' = []
+    | c == sBottom = []
     | otherwise = [c]
 flatten (SEQ s es)
-    | s == '\0' = concatMap flatten es
+    | s == sBottom = concatMap flatten es
     | otherwise = s:concatMap flatten es
 flatten (ALT es) = concatMap flatten es
 flatten (STAR e) = flatten e
