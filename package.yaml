@@ -41,7 +41,6 @@ ghc-options:
 - -Wredundant-constraints
 - -fno-cse
 - -fno-full-laziness
-
 library:
   source-dirs: src
 
@@ -69,6 +68,46 @@ tests:
     - zippers-on-derivatives
 
 benchmarks:
+  rexp-matching:
+    main: app/benchmarks/Rexp.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
+  edelmann-matching:
+    main: app/benchmarks/EdelmannZipper.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
+  rexpzipper-matching:
+    main: app/benchmarks/RexpZipper.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
+  rexpzipperv2-matching:
+    main: app/benchmarks/RexpZipperv2.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
   edelmann:
     main: app/benchmarks/Edelmann.hs
     ghc-options:

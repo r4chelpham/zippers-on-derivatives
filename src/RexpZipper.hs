@@ -18,7 +18,6 @@ data Exp = ZERO
             | PLUS Exp
             | OPTIONAL Exp
             | NTIMES Int Exp
-            | NTIMES Int Exp
             | RECD [Char] Exp
             deriving (Ord, Eq, Show)
 
