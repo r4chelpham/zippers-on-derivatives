@@ -3,7 +3,6 @@ module ZipperLexerv2 where
 import RexpZipperv2
 import Token
 import qualified Data.Set as Set
-import GHC.IORef
 
 {- WHILE Language registers -}
 keyword :: IO Exp

@@ -293,9 +293,9 @@ der pos c (Zipper ex me) = up ex me
         writeIORef (parents m') [AltC m]
         down (SeqC m' s [] es) e
         case es of
-          [] -> return () -- | Parse as normal...
+          [] -> return () -- | Derive as normal...
           (er:esr) -> down (SeqC m' s [] esr) er
-          -- ^ Parse as if the first part matched the empty string...
+          -- ^ Derive as if the first part matched the empty string...
       else down (SeqC m s [] es) e
     down' m (ALT es) = do
       modifyIORef' count (+1)
@@ -408,15 +408,9 @@ unwrapTopExp e = do
 
 run :: [Char] -> Exp -> IO [Exp]
 run s e = do
-  case s of
-    [] -> do
-      nu <- nullable e
-      if nu then return [e] else return []
-    _ -> do
-      writeIORef count 0
-      z <- focus e
-      writeIORef workList [z]
-      run' 0 s
+  z <- focus e
+  writeIORef workList [z]
+  run' 0 s
 
 run' :: Int -> [Char] -> IO [Exp]
 run' pos s = do
@@ -477,6 +471,11 @@ env e = do
       vs <- env e
       return ((s, v):vs)
     _ -> return []
+
+lexing :: IO [Exp] -> IO [[([Char], [Char])]]
+lexing esIO = do
+  es <- esIO
+  mapM env es
 
 -- | Simplifications - 1 . r == r
 isEmptySeq :: Exp' -> Bool
