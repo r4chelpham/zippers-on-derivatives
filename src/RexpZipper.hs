@@ -18,7 +18,7 @@ data Exp = ZERO
             | STAR Exp
             | PLUS Exp
             | OPTIONAL Exp
-            | NTIMES Int Exp -- number of repetitions left, the Exp it represents, the processed Exps, whether it is nullable or not - a little expensive tho? you're still going down the whole tree once
+            | NTIMES Int Exp
             | RECD [Char] Exp
             deriving (Ord, Eq, Show)
 
@@ -31,12 +31,6 @@ data Exp = ZERO
 
 defaultSEQ :: [Exp] -> Exp
 defaultSEQ = SEQ '\0'
-
--- defaultPLUS :: Exp -> Exp
--- defaultPLUS r = defaultSEQ [r, defaultSTAR r]
-
--- defaultOPTIONAL :: Exp -> Exp
--- defaultOPTIONAL r = ALT [ONE, r]
 
 data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
@@ -82,7 +76,7 @@ nullable (RECD _ r) = nullable r
 -}
 
 focus :: Exp -> Zipper
-focus r = Zipper r (SeqC TopC '\0' [] [r])
+focus r = Zipper (SEQ '\0' []) (SeqC TopC '\0' [] [r, CHAR '\0'])
 
 {-
     Derives the result of an Exp from one character:
@@ -130,7 +124,12 @@ der c (Zipper re ctx) = up re ctx
     down ct (NTIMES n e) =
         let e' = NTIMES (n-1) e
             ctt = SeqC ct '\0' [] [e']
-        in down ctt e
+            zs = down ctt e
+        in 
+            if nullable e then
+                let zs' = up e' ct
+                in (zs ++ zs')
+            else zs
     down ct (RECD s r') = down (RecdC ct s) r'
 
     up :: Exp -> Context -> [Zipper]
@@ -172,7 +171,7 @@ der c (Zipper re ctx) = up re ctx
     It then filters all of the zippers that are nullable.
 -}
 ders :: [Char] -> [Zipper] -> [Zipper]
-ders [] zs = zs
+ders [] zs = concatMap (der '\0') zs
 ders (c:cs) zs = ders cs (concatMap (der c) zs)
 
 getNullableZippers :: [Zipper] -> [Zipper]
@@ -209,15 +208,14 @@ isNullable (RecdC ct _) = isNullable ct
     TODO: fix this
 -}
 lexing :: [Char] -> Exp -> [Exp]
-lexing cs e =
-    let zs = getNullableZippers (ders cs [focus (simp e)]) in
-        map (\(Zipper r' ct) -> getExpFromZipper (plug r' ct)) zs
+lexing cs e = map getExpFromZipper (ders cs [focus e])
 
 lexSimp :: [Char] -> Exp -> [[([Char], [Char])]]
 lexSimp s r = map env (lexing s r)
 
 getExpFromZipper :: Zipper -> Exp
-getExpFromZipper (Zipper r _) = r
+getExpFromZipper (Zipper _ (SeqC TopC _ es _)) = head es
+getExpFromZipper _ = error "not valid structure"
 
 plug :: Exp -> Context -> Zipper
 plug e (SeqC TopC _ _ _) = Zipper e TopC

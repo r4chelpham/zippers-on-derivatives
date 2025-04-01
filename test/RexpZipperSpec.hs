@@ -10,7 +10,7 @@ spec = do
     describe "focus" $ do
         it "creates a zipper with the given expression" $ do
             let Z.Zipper r _ = Z.focus (Z.CHAR 'a')
-            r `shouldBe` Z.CHAR 'a'
+            r `shouldBe` Z.SEQ '\0' []
 
     describe "simp" $ do
         it "simplifies SEQ" $ do
@@ -39,13 +39,13 @@ spec = do
         it "derivative of ZERO is always empty" $ do
             Z.der 'a' (Z.focus Z.ZERO) `shouldBe` []
 
-        it "derivative of ONE with epsilon character produces empty SEQ" $ do
+        it "derivative of ONE with empty string produces empty SEQ" $ do
             let result = Z.der '\0' (Z.focus Z.ONE)
-            result `shouldBe` []
+            result `shouldBe` [Z.Zipper (Z.SEQ '\0' []) (Z.SeqC Z.TopC '\0' [Z.SEQ '\0' []] [])]
 
         it "derivative of a character with itself produces an empty SEQ" $ do
             let result = Z.der 'a' (Z.focus (Z.CHAR 'a'))
-            result `shouldBe` [Z.Zipper (Z.SEQ 'a' []) (Z.SeqC Z.TopC '\NUL' [Z.CHAR 'a'] [])]
+            result `shouldBe` [Z.Zipper (Z.SEQ 'a' []) (Z.SeqC Z.TopC '\NUL' [Z.SEQ '\0' []] [Z.CHAR '\0'])]
 
         it "derivative of a character with a different character is empty" $ do
             Z.der 'b' (Z.focus (Z.CHAR 'a')) `shouldBe` []
@@ -58,7 +58,7 @@ spec = do
             Z.der 'b' (Z.focus r) `shouldBe` [
                 Z.Zipper (Z.SEQ 'b' []) 
                 (Z.AltC 
-                    (Z.SeqC Z.TopC '\0' [Z.ALT [Z.CHAR 'a',Z.CHAR 'b',Z.CHAR 'c']] [])
+                    (Z.SeqC Z.TopC '\0' [Z.SEQ '\0' []] [Z.CHAR '\0'])
                 )]
 
         it "derivative of STAR should allow repetition" $ do

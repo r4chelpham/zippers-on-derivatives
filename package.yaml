@@ -37,6 +37,8 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -fno-cse
+- -fno-full-laziness
 
 library:
   source-dirs: src
