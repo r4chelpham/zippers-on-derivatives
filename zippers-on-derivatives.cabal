@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -30,6 +30,7 @@ library
       EdelmannZipper
       Lexer
       Rexp
+      RexpBench
       RexpZipper
       RexpZipperv2
       Token
@@ -114,7 +115,7 @@ benchmark edelmann
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
   build-depends:
       QuickCheck >=2.14.3
     , base >=4.7 && <5
@@ -134,7 +135,7 @@ benchmark urban
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
   build-depends:
       QuickCheck >=2.14.3
     , base >=4.7 && <5
@@ -154,7 +155,7 @@ benchmark zipper-lexer
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
   build-depends:
       QuickCheck >=2.14.3
     , base >=4.7 && <5
@@ -174,7 +175,7 @@ benchmark zipper-lexerv2
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
   build-depends:
       QuickCheck >=2.14.3
     , base >=4.7 && <5
