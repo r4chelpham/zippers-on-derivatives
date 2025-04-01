@@ -71,10 +71,33 @@ der (NTIMES r n) c = SEQ (der r c) (NTIMES r (n-1))
 
 ders :: Rexp -> [Char] -> Rexp
 ders r [] = r
-ders r (c:cs) = ders (der r c) cs
+ders r (c:cs) = ders (simp (der r c)) cs
 
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
+
+simp :: Rexp -> Rexp
+simp (ALT r1 r2) =
+    let r1s = simp r1
+        r2s = simp r2
+    in case (r1s, r2s) of
+        (ZERO, _) -> r2s
+        (_, ZERO) -> r1s
+        _ ->
+            if r1s == r2s then
+                r1s
+            else
+                ALT r1s r2s
+simp (SEQ r1 r2) =
+    let r1s = simp r1
+        r2s = simp r2
+    in case (r1s, r2s) of
+        (ZERO, _) -> ZERO
+        (_, ZERO) -> ZERO
+        (ONE, _) -> r2s
+        (_, ONE) -> r1s
+        _ -> SEQ r1s r2s
+simp r = r
 
 hasFirst :: Rexp -> Bool
 hasFirst (CHAR _) = True
@@ -105,9 +128,13 @@ instance ToRexp Rexp where
 instance ToRexp String where
   toRexp = stringToRexp
 
-infixl 6 <~>
-infixl 5 <|>
-infixl 3 <$>
+infixl 9 ^>
+infixl 8 ?>
+infixl 7 +>
+infixl 6 *>
+infixl 4 <~>
+infixl 3 <|>
+infixl 1 <$>
 
 (<~>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
 a <~> b = SEQ (toRexp a) (toRexp b)
@@ -117,3 +144,15 @@ a <|> b = ALT (toRexp a) (toRexp b)
 
 (<$>) :: String -> Rexp -> Rexp
 s <$> r = RECD s r
+
+(*>) :: ToRexp a => a -> b -> Rexp
+r *> _ = STAR (toRexp r)
+
+(+>) :: ToRexp a => a -> b -> Rexp
+r +> _ = PLUS (toRexp r)
+
+(?>) :: ToRexp a => a -> b -> Rexp
+r ?> _ = OPTIONAL (toRexp r)
+
+(^>) :: ToRexp a => a -> Int -> Rexp
+r ^> n = NTIMES (toRexp r) n

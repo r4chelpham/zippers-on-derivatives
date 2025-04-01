@@ -80,8 +80,8 @@ fError _ = error "error"
 
 simp :: Rexp -> (Rexp, Val -> Val)
 simp (ALT r1 r2) =
-    let (r1s, f1s) = simp r1
-        (r2s, f2s) = simp r2
+    let (r1s, f1s) = Lexer.simp r1
+        (r2s, f2s) = Lexer.simp r2
     in case (r1s, r2s) of
         (ZERO, _) -> (r2s, fRight f2s)
         (_, ZERO) -> (r1s, fLeft f1s)
@@ -91,8 +91,8 @@ simp (ALT r1 r2) =
             else
                 (ALT r1s r2s, fAlt f1s f2s))
 simp (SEQ r1 r2) =
-    let (r1s, f1s) = simp r1
-        (r2s, f2s) = simp r2
+    let (r1s, f1s) = Lexer.simp r1
+        (r2s, f2s) = Lexer.simp r2
     in case (r1s, r2s) of
         (ZERO, _) -> (ZERO, fError)
         (_, ZERO) -> (ZERO, fError)
@@ -107,7 +107,7 @@ lexSimp r []
     | nullable r = mkeps r
     | otherwise = error "Lexing error"
 lexSimp r (c:cs) =
-    let (rSimp, fSimp) = simp (der r c) in
+    let (rSimp, fSimp) = Lexer.simp (der r c) in
     inj r c (fSimp $ lexSimp rSimp cs)
 
 lexingSimp :: Rexp -> String -> [(String, String)]
