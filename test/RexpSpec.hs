@@ -1,6 +1,7 @@
 module RexpSpec where
 import Test.QuickCheck
 import Test.Hspec
+import RexpA
 import Rexp
 
 spec :: Spec

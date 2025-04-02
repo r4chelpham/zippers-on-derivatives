@@ -2,15 +2,12 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module RexpZipper where
-import Test.QuickCheck
 import qualified Data.Set as Set
 import Data.List (intercalate)
 
 type Sym = Char
 
-data Rexp = ZERO
-            | ONE
-            | CHAR Char
+data Rexp = CHAR Char
             | RANGE (Set.Set Char)
             | SEQ Sym [Rexp]
             | ALT [Rexp]
@@ -42,23 +39,10 @@ data Context = TopC
 
 data Zipper = Zipper Rexp Context deriving (Ord, Eq, Show)
 
-instance Arbitrary Rexp where
-    arbitrary = oneof
-        [ return ZERO
-        , return ONE
-        , CHAR Prelude.<$> arbitrary
-        , RANGE Prelude.<$> arbitrary
-        , SEQ Prelude.<$> arbitrary <*> listOf arbitrary
-        , ALT Prelude.<$> listOf arbitrary
-        , STAR Prelude.<$> arbitrary
-        ]
-
 {- 
     Whether an Rexp is nullable (can match the empty string).
 -}
 nullable :: Rexp -> Bool
-nullable ZERO = False
-nullable ONE = True
 nullable (CHAR _) = False
 nullable (RANGE _) = False
 nullable (ALT es) = any nullable es
@@ -104,8 +88,6 @@ der ::  Char -> Zipper -> [Zipper]
 der c (Zipper re ctx) = up re ctx
     where
     down :: Context -> Rexp -> [Zipper]
-    down _ ZERO = []
-    down _ ONE = []
     down ct (CHAR d)
         | c == d = [Zipper (SEQ c []) ct]
         | otherwise = []
@@ -235,18 +217,12 @@ env (STAR r) = env r
 env (NTIMES _ r) = env r
 env (RECD s r) = (s, flatten r) : env r
 
-simp :: Rexp -> Rexp
-simp (SEQ s rs) = SEQ s (map simp (filter (/= ONE) rs))
-simp (ALT rs) = ALT (map simp (filter (/= ZERO) rs))
-simp (STAR (STAR r)) = simp (STAR r)
-simp r = r
-
 {- 
     Converting a string to a regular expression 
     without explicitly using the constructors. 
 -}
 stringToRexp :: [Char] -> Rexp
-stringToRexp [] = ONE
+stringToRexp [] = defaultSEQ []
 stringToRexp [c] = CHAR c
 stringToRexp (c:cs) = defaultSEQ (CHAR c:map CHAR cs)
 
@@ -323,8 +299,6 @@ pps :: [Rexp] -> String
 pps es = indent (map pp es)
 
 pp :: Rexp -> String
-pp ZERO        = "0\n"
-pp ONE         = "1\n"
 pp (CHAR c)     = c : "\n"
 pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
 pp (SEQ s rs)  =  (if null rs then [s] else "SEQ\n" ++ pps rs) ++ "\n"

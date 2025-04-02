@@ -4,6 +4,7 @@ import Test.Hspec
 import Control.Exception (evaluate)
 import qualified Lexer
 import Rexp
+import RexpA
 import Val
 
 

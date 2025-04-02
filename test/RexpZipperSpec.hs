@@ -4,6 +4,8 @@ import Test.QuickCheck
 import Test.Hspec
 import Control.Exception (evaluate)
 import qualified RexpZipper as Z
+import qualified RexpB
+
 
 spec :: Spec
 spec = do
@@ -12,22 +14,12 @@ spec = do
             let Z.Zipper r _ = Z.focus (Z.CHAR 'a')
             r `shouldBe` Z.SEQ '\0' []
     describe "der" $ do
-        it "derivative of ZERO is always empty" $ do
-            Z.der 'a' (Z.focus Z.ZERO) `shouldBe` []
-
-        it "derivative of ONE with empty string produces empty SEQ" $ do
-            let result = Z.der '\0' (Z.focus Z.ONE)
-            result `shouldBe` [Z.Zipper (Z.SEQ '\0' []) (Z.SeqC Z.TopC '\0' [Z.SEQ '\0' []] [])]
-
         it "derivative of a character with itself produces an empty SEQ" $ do
             let result = Z.der 'a' (Z.focus (Z.CHAR 'a'))
             result `shouldBe` [Z.Zipper (Z.SEQ 'a' []) (Z.SeqC Z.TopC '\NUL' [Z.SEQ '\0' []] [Z.CHAR '\0'])]
 
         it "derivative of a character with a different character is empty" $ do
             Z.der 'b' (Z.focus (Z.CHAR 'a')) `shouldBe` []
-
-        it "derivative of ZERO is always empty" $ property $ 
-            \c -> null (Z.der c (Z.focus Z.ZERO))
 
         it "derivative of ALT with matching character should return correct result" $ do
             let r = Z.ALT [Z.CHAR 'a', Z.CHAR 'b', Z.CHAR 'c']
@@ -95,6 +87,13 @@ spec = do
             let result = Z.ders "b" [Z.focus r]
             result `shouldBe` []
 
+        it "NTIMES inside ALT should allow correct branching" $ do
+            let r = Z.ALT [Z.NTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
+            let resultA = Z.ders "aa" [Z.focus r]
+            let resultB = Z.ders "b" [Z.focus r]
+            resultA `shouldNotBe` []
+            resultB `shouldNotBe` []
+
     describe "matcher" $ do
         it "matches a simple string" $ do
             let r = Z.SEQ '\0' [Z.CHAR 'a', Z.CHAR 'b']
@@ -104,17 +103,11 @@ spec = do
             let r = Z.SEQ '\0' [Z.CHAR 'a', Z.CHAR 'b']
             Z.matcher "ac" r `shouldBe` False
 
-        it "matches an empty string with ONE" $ do
-            Z.matcher "" Z.ONE `shouldBe` True
-
         it "does not match an empty string with a non-empty rression" $ do
             Z.matcher "" (Z.CHAR 'a') `shouldBe` False
 
         it  "recognises its corresponding sequence" $ property $
             \s -> Z.matcher s (Z.SEQ '\0' (map Z.CHAR s))
-
-        it "only matches empty strings to ONE" $ property $
-            \s -> Z.matcher s Z.ONE == (s == "" && s /= "\0") 
 
         it "recognises repetitions with STAR" $ do
             let r = Z.STAR (Z.CHAR 'a')
@@ -199,36 +192,17 @@ spec = do
          -}
 
     describe "flatten" $ do
-        it "throws an error when flattening ZERO" $ do
-            evaluate (Z.flatten Z.ZERO) `shouldThrow` errorCall "Cannot flatten ZERO"
-
-        it "returns an empty list when flattening ONE" $ do
-            Z.flatten Z.ONE `shouldBe` []
-
-        it "returns an empty list when flattening CHAR" $ do
-            Z.flatten (Z.CHAR 'a') `shouldBe` []
-
         it "returns a list with the char when flattening SEQ with empty list" $ do
             Z.flatten (Z.SEQ 'a' []) `shouldBe` ['a']
 
         it "returns a concatenated list of flattened expressions for SEQ" $ do
-            Z.flatten (Z.SEQ 'a' [Z.CHAR 'b', Z.SEQ 'c' [Z.ONE]]) `shouldBe` ['a', 'c']
+            Z.flatten (Z.SEQ 'a' [Z.SEQ 'c' []]) `shouldBe` ['a', 'c']
 
         it "returns a concatenated list of flattened expressions for ALT" $ do
-            Z.flatten (Z.ALT [Z.CHAR 'a', Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []]) `shouldBe` ['b', 'c']
-
-        it "returns a concatenated list of flattened expressions for STAR" $ do
-            Z.flatten (Z.STAR (Z.ALT [Z.SEQ 'b' [Z.ONE], Z.SEQ 'c' []])) `shouldBe` ['b', 'c']
+            Z.flatten (Z.ALT [ Z.SEQ 'b' [], Z.SEQ 'c' []]) `shouldBe` ['b', 'c']
 
         it "correctly flattens deeply nested expressions" $ do
-            Z.flatten (Z.ALT [Z.SEQ 'x' [Z.STAR (Z.CHAR 'z')], Z.SEQ 'a' [Z.ONE]]) `shouldBe` ['x', 'a']
-
-        it "NTIMES inside ALT should allow correct branching" $ do
-            let r = Z.ALT [Z.NTIMES 2 (Z.CHAR 'a'), Z.CHAR 'b']
-            let resultA = Z.ders "aa" [Z.focus r]
-            let resultB = Z.ders "b" [Z.focus r]
-            resultA `shouldNotBe` []
-            resultB `shouldNotBe` []
+            Z.flatten (Z.ALT [Z.SEQ 'x' [], Z.SEQ 'a' []]) `shouldBe` ['x', 'a']
         
 
         
