@@ -27,7 +27,6 @@ instance Memoizable (Set.Set Char) where
 
 deriveMemoizable ''Rexp
 
-
 nullable :: Rexp -> Bool
 nullable ZERO = False
 nullable ONE = True
@@ -58,33 +57,10 @@ der (NTIMES r n) c = SEQ (der r c) (NTIMES r (n-1))
 
 ders :: Rexp -> [Char] -> Rexp
 ders r [] = r
-ders r (c:cs) = ders (simp (der r c)) cs
+ders r (c:cs) = ders (der r c) cs
 
 matcher :: Rexp -> [Char] -> Bool
 matcher r s = nullable (ders r s)
-
-simp :: Rexp -> Rexp
-simp (ALT r1 r2) =
-    let r1s = simp r1
-        r2s = simp r2
-    in case (r1s, r2s) of
-        (ZERO, _) -> r2s
-        (_, ZERO) -> r1s
-        _ ->
-            if r1s == r2s then
-                r1s
-            else
-                ALT r1s r2s
-simp (SEQ r1 r2) =
-    let r1s = simp r1
-        r2s = simp r2
-    in case (r1s, r2s) of
-        (ZERO, _) -> ZERO
-        (_, ZERO) -> ZERO
-        (ONE, _) -> r2s
-        (_, ONE) -> r1s
-        _ -> SEQ r1s r2s
-simp r = r
 
 hasFirst :: Rexp -> Bool
 hasFirst (CHAR _) = True
