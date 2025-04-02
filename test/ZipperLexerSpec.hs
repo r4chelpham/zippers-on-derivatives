@@ -5,7 +5,6 @@ import Test.Hspec
 import qualified ZipperLexer as ZL
 import Lexer
 import Token
-import Control.Exception (evaluate)
 import Control.Monad (forM_)
 
 spec :: Spec

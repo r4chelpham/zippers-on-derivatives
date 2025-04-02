@@ -4,7 +4,6 @@ module EdelmannLexerSpec where
     
 import Test.QuickCheck
 import Test.Hspec
-import Control.Exception (evaluate)
 import EdelmannLexer
 import Lexer
 import Control.Monad(forM_)

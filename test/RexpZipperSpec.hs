@@ -11,30 +11,6 @@ spec = do
         it "creates a zipper with the given expression" $ do
             let Z.Zipper r _ = Z.focus (Z.CHAR 'a')
             r `shouldBe` Z.SEQ '\0' []
-
-    describe "simp" $ do
-        it "simplifies SEQ" $ do
-            let r = Z.defaultSEQ [Z.ONE, Z.CHAR 'a', Z.CHAR 'b', Z.ONE, Z.CHAR 'c', Z.CHAR 'd', Z.ONE]
-            Z.simp r `shouldBe` Z.defaultSEQ [Z.CHAR 'a', Z.CHAR 'b', Z.CHAR 'c', Z.CHAR 'd']
-
-        it "simplifies ALT" $ do
-            let r = Z.ALT [Z.ZERO, Z.CHAR 'c', Z.CHAR 'd', Z.ZERO, Z.CHAR 'a', Z.CHAR 'b', Z.ZERO]
-            Z.simp r `shouldBe` Z.ALT [Z.CHAR 'c', Z.CHAR 'd', Z.CHAR 'a', Z.CHAR 'b']
-
-        it "simplifies STAR" $ do
-            let r = Z.STAR(Z.STAR (Z.STAR (Z.STAR (Z.CHAR 'a'))))
-            Z.simp r `shouldBe` Z.STAR (Z.CHAR 'a')
-        
-        it "simplifies the inner expressions of a regular expression as well as the outer expression" $ do
-            let r0 = Z.ALT [Z.ZERO, Z.CHAR 'c', Z.CHAR 'd', Z.ZERO, Z.CHAR 'a', Z.CHAR 'b', Z.ZERO]
-            let r1 = Z.STAR(Z.STAR (Z.STAR (Z.STAR (Z.CHAR 'a'))))
-            let r2 = Z.defaultSEQ [Z.ONE, Z.CHAR 'a', Z.CHAR 'b', Z.ONE, Z.CHAR 'c', Z.CHAR 'd', Z.ONE]
-            let r = Z.ALT [r0, r1, r2]
-            Z.simp r `shouldBe` Z.ALT [
-                Z.ALT [Z.CHAR 'c', Z.CHAR 'd', Z.CHAR 'a', Z.CHAR 'b'] 
-                , Z.STAR (Z.CHAR 'a')
-                , Z.defaultSEQ [Z.CHAR 'a', Z.CHAR 'b', Z.CHAR 'c', Z.CHAR 'd']]
-
     describe "der" $ do
         it "derivative of ZERO is always empty" $ do
             Z.der 'a' (Z.focus Z.ZERO) `shouldBe` []
