@@ -44,13 +44,6 @@ root :: Zipper a -> Zipper a
 root z@(Zipper _ T) = z
 root z@(Zipper _ _) = up z
 
--- modify the value of the node at some position in the zipper
-modify :: Zipper a -> (a -> a) -> Zipper a
-modify z@(Zipper n c) f = 
-    case n of
-        (Node x l r) -> Zipper (Node (f x) l r) c
-        Nil -> z
-
 -- function to make traversing the tree more readable
 infixl 1 -:  -- Left-associative, binds loosely so you can chain movements in the zipper L->R
 (-:) :: t1 -> (t1 -> t2) -> t2

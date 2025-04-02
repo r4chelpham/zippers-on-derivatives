@@ -35,6 +35,7 @@ data Context = TopC
             | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Context -- Alternate has one context shared between its children
             | StarC Context [Exp] Exp
+            | OptionalC Context
             | NTimesC Context Int [Exp] Exp
             | RecdC Context [Char]
             deriving (Ord, Eq, Show)
@@ -124,7 +125,7 @@ der c (Zipper re ctx) = up re ctx
     down ct (ALT es) = concatMap (down (AltC ct)) es
     down ct (STAR e) = down (StarC ct [] e) e
     down ct (PLUS e) = down (StarC ct [] e) e
-    down ct (OPTIONAL e) = down ct e
+    down ct (OPTIONAL e) = down (OptionalC ct) e
     down ct r@(NTIMES 0 _) = up r ct
     down ct (NTIMES n e) =
         let e' = NTIMES (n-1) e
@@ -151,6 +152,7 @@ der c (Zipper re ctx) = up re ctx
             if null zs then
                 up (defaultSEQ (reverse (e:es))) ct
             else zs
+    up e (OptionalC ct) = up e ct
     up e (NTimesC ct 0 es _) = up (defaultSEQ (reverse (e:es))) ct
     up e (NTimesC ctt n es r) =
         if nullable e then
@@ -178,7 +180,7 @@ getNullableZippers = concatMap (\z@(Zipper r' ct) -> ([z | nullable r' && isNull
 matcher :: [Char] -> Exp -> Bool
 matcher [] r = nullable r
 matcher s r =
-    let zs = ders s [focus (simp r)] in
+    let zs = ders s [focus r] in
         not (null zs)
 
 {- 
