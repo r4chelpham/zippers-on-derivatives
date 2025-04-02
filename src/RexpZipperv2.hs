@@ -12,49 +12,49 @@ import qualified Data.Set as Set
 
 type Sym = Char
 
-data Exp = Exp {
+data Rexp = Rexp {
   mem :: IORef Mem
-  , exp' :: IORef Exp'
+  , rexp' :: IORef Rexp'
 }
 
-instance Show Exp where
-  show (Exp _ e') =
+instance Show Rexp where
+  show (Rexp _ r') =
     "Mem: { ... }" ++
-    "\nExp: " ++
-    show (unsafePerformIO (readIORef e'))
+    "\nRexp: " ++
+    show (unsafePerformIO (readIORef r'))
 
-instance Ord Exp where
-    compare = comparing (unsafePerformIO . readIORef . exp')
+instance Ord Rexp where
+    compare = comparing (unsafePerformIO . readIORef . rexp')
 
-instance Eq Exp where
-  (Exp _ e1') == (Exp _ e2') = 
-    unsafePerformIO (readIORef e1') == unsafePerformIO (readIORef e2')
+instance Eq Rexp where
+  (Rexp _ r1') == (Rexp _ r2') = 
+    unsafePerformIO (readIORef r1') == unsafePerformIO (readIORef r2')
 
 {-| ZERO and ONE are not needed in the algorithm because they
   are represented as ALT [] and SEQ [] respectively.
 -}
-data Exp' = CHAR Char
-            | SEQ Sym [Exp]
-            | ALT [Exp]
-            | STAR Exp
-            | PLUS Exp
-            | OPTIONAL Exp
-            | NTIMES Int Exp
-            | RECD [Char] Exp
+data Rexp' = CHAR Char
+            | SEQ Sym [Rexp]
+            | ALT [Rexp]
+            | STAR Rexp
+            | PLUS Rexp
+            | OPTIONAL Rexp
+            | NTIMES Int Rexp
+            | RECD [Char] Rexp
             | RANGE (Set.Set Char)
             deriving (Ord, Eq, Show)
 
 data Context = TopC
-            | SeqC Mem Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
+            | SeqC Mem Sym [Rexp] [Rexp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Mem -- Alternate has one context shared between its children
-            | StarC Mem [Exp] Exp
-            -- | PlusC Mem [Exp] Exp
+            | StarC Mem [Rexp] Rexp
+            -- | PlusC Mem [Rexp] Rexp
             | OptionalC Mem
-            -- | NTimesC Mem Int [Exp] Exp Bool
+            -- | NTimesC Mem Int [Rexp] Rexp Bool
             | RecdC Mem [Char]
             deriving (Ord, Eq, Show)
 
-data Zipper = Zipper Exp' Mem deriving (Ord, Show)
+data Zipper = Zipper Rexp' Mem deriving (Ord, Show)
 
 instance Eq Zipper where
   (Zipper e m) == (Zipper e' m') =
@@ -65,7 +65,7 @@ data Mem = Mem
     start :: Int
     , end :: IORef Int
     , parents :: IORef [Context]
-    , result :: IORef Exp
+    , result :: IORef Rexp
   }
 
 instance Eq Mem where
@@ -96,39 +96,39 @@ count :: IORef Integer
 {-# NOINLINE count #-}
 count = unsafePerformIO $ newIORef 0
 
-{-| Gives an Exp' an associated memory.
+{-| Gives an Rexp' an associated memory.
 
-  Mainly called when we create an Exp from scratch - 
+  Mainly called when we create an Rexp from scratch - 
   often at the very beginning and not during the 
-  actual matching/lexing of the Exp.
+  actual matching/lexing of the Rexp.
 -}
-createExp :: Exp' -> IO Exp
-createExp e' = do
+createRexp :: Rexp' -> IO Rexp
+createRexp e' = do
   m <- mBottom
   mRef <- newIORef m
   eSimp' <- simp e'
   eRef <- newIORef eSimp'
-  return Exp
+  return Rexp
     {
       mem = mRef
-      , exp' = eRef
+      , rexp' = eRef
     }
 
-{-| Creates the default Expression and Memory to be
+{-| Creates the default Rexp and Memory to be
   used in the zipper operations.
 
   Equivalent to E⊥ and M⊥ in the Darragh and Adams paper
   respectively.
 -}
-defaults :: IO (Exp, Mem)
+defaults :: IO (Rexp, Mem)
 defaults = do
   mRef <- newIORef undefined
   e' <- newIORef (ALT [])
   ps <- newIORef [TopC]
   end' <- newIORef (-1)
-  let e = Exp {
+  let e = Rexp {
         mem = mRef
-        , exp' = e'
+        , rexp' = e'
       }
   eRef <- newIORef e
   let m = Mem {
@@ -140,12 +140,12 @@ defaults = do
   writeIORef mRef m
   return (e, m)
 
-{-| Retrieve the default Exp.
+{-| Retrieve the default Rexp.
 
   Equivalent to E⊥ in the Darragh and Adams paper.
 -}
-eBottom :: IO Exp
-eBottom = fst Prelude.<$> defaults
+rBottom :: IO Rexp
+rBottom = fst Prelude.<$> defaults
 
 {-| Retrieve the default Memory.
 
@@ -167,7 +167,7 @@ sBottom = '\0'
 {-| Creates a zipper that focuses on the given
   expression.
 -}
-focus :: Exp -> IO Zipper
+focus :: Rexp -> IO Zipper
 focus e = do
     mTop <- mBottom
     writeIORef (parents mTop) [TopC]
@@ -180,21 +180,47 @@ focus e = do
 {-| Determines whether the expression given is able
   to match the empty string or not.
 -}
-nullable :: Exp -> IO Bool
-nullable e = do
-  e' <- readIORef (exp' e)
-  case e' of
-    (CHAR _) -> return False
-    (ALT es) -> process id False (||) es
-    (SEQ _ []) -> return True
-    (SEQ _ es) -> process not True (&&) es
-    (STAR _) -> return True
-    (PLUS e'') -> nullable e''
-    (OPTIONAL _) -> return True
-    (NTIMES 0 _) -> return True
-    (NTIMES _ e'') -> nullable e''
-    (RECD _ e'') -> nullable e''
-    (RANGE _) -> return False
+nullable :: Rexp -> IO Bool
+nullable r = do
+  r' <- readIORef (rexp' r)
+  case r' of
+    (CHAR _) -> do
+      modifyIORef' count (+1)
+      return False
+    (ALT rs) -> do
+      modifyIORef' count (+1)
+      -- res <- mapM nullable es
+      -- return (or res)
+      process id False (||) rs
+    (SEQ _ []) -> do
+      modifyIORef' count (+1)
+      return True
+    (SEQ _ rs) -> do
+      modifyIORef' count (+1)
+      -- res <- mapM nullable es
+      -- return (and res)
+      process not True (&&) rs
+    (STAR _) -> do
+      modifyIORef' count (+1)
+      return True
+    (PLUS r'') -> do
+      modifyIORef' count (+1)
+      nullable r''
+    (OPTIONAL _) -> do
+      modifyIORef' count (+1)
+      return True
+    (NTIMES 0 _) -> do
+      modifyIORef' count (+1)
+      return True
+    (NTIMES _ r'') -> do
+      modifyIORef' count (+1)
+      nullable r''
+    (RECD _ r'') -> do
+      modifyIORef' count (+1)
+      nullable r''
+    (RANGE _) -> do
+      modifyIORef' count (+1)
+      return False
   where
     {-| Helper function to process lists of expressions.
       condition - The condition for nullability (
@@ -206,16 +232,16 @@ nullable e = do
         ALT - (||) OR operator because nullable (ALT [e1 .. en]) = nullable e1 || .. || nullable en
         ALT - (&&) AND operator because nullable (SEQ [e1 .. en]) = nullable e1 && .. && nullable en
       )
-      (e:es) - The list of elements to process.
+      (r:rs) - The list of elements to process.
     -}
-    process :: (Bool -> Bool) -> Bool -> (Bool -> Bool -> Bool) -> [Exp] -> IO Bool
+    process :: (Bool -> Bool) -> Bool -> (Bool -> Bool -> Bool) -> [Rexp] -> IO Bool
     process _ identity _ [] = return identity
-    process condition identity combine (e:es) = do
-      b <- nullable e
+    process condition identity combine (r:rs) = do
+      b <- nullable r
       if condition b
         then return b
         else do
-          rest <- process condition identity combine es
+          rest <- process condition identity combine rs
           return (combine b rest)
 
 {-| Global variable - workList holds the zippers created from a
@@ -228,7 +254,7 @@ workList = unsafePerformIO $ newIORef []
 {-| Global variable - tops holds the regexes obtained from
   reaching the root of any zipper.
 -}
-tops :: IORef [Exp]
+tops :: IORef [Rexp]
 {-# NOINLINE tops #-}
 tops = unsafePerformIO $ newIORef []
 
@@ -250,11 +276,11 @@ tops = unsafePerformIO $ newIORef []
   (Zipper ex me) - The zipper to take the derivation on.
 -}
 der ::  Int -> Char -> Zipper -> IO ()
-der pos c (Zipper ex me) = up ex me
+der pos c (Zipper re me) = up re me
     where
-    down :: Context -> Exp -> IO ()
-    down ct e = do
-      m <- readIORef (mem e)
+    down :: Context -> Rexp -> IO ()
+    down ct r = do
+      m <- readIORef (mem r)
       if pos == start m then do
         modifyIORef (parents m) (++ [ct])
         end' <- readIORef (end m)
@@ -269,11 +295,11 @@ der pos c (Zipper ex me) = up ex me
           start = pos
         }
         writeIORef (parents newMem) [ct]
-        writeIORef (mem e) newMem
-        e' <- readIORef (exp' e)
-        down' newMem e'
+        writeIORef (mem r) newMem
+        r' <- readIORef (rexp' r)
+        down' newMem r'
 
-    down' :: Mem -> Exp' -> IO ()
+    down' :: Mem -> Rexp' -> IO ()
     down' m (CHAR d)
         | c == d = do
           modifyIORef' count (+1)
@@ -282,8 +308,8 @@ der pos c (Zipper ex me) = up ex me
     down' m r@(SEQ _  []) = do
         modifyIORef' count (+1)
         up r m
-    down' m (SEQ s (e:es)) = do
-      nu <- nullable e
+    down' m (SEQ s (r:rs)) = do
+      nu <- nullable r
       modifyIORef' count (+1)
       if nu then do
         mBott <- mBottom
@@ -291,128 +317,128 @@ der pos c (Zipper ex me) = up ex me
           start = start m
         }
         writeIORef (parents m') [AltC m]
-        down (SeqC m' s [] es) e
-        case es of
+        down (SeqC m' s [] rs) r
+        case rs of
           [] -> return () -- | Derive as normal...
-          (er:esr) -> down (SeqC m' s [] esr) er
+          (r':rs') -> down (SeqC m' s [] rs') r'
           -- ^ Derive as if the first part matched the empty string...
-      else down (SeqC m s [] es) e
-    down' m (ALT es) = do
+      else down (SeqC m s [] rs) r
+    down' m (ALT rs) = do
       modifyIORef' count (+1)
-      mapM_ (down (AltC m)) es
-    down' m (STAR e) = do
+      mapM_ (down (AltC m)) rs
+    down' m (STAR r) = do
       modifyIORef' count (+1)
-      down (StarC m [] e) e
-    down' m (PLUS e) = do
+      down (StarC m [] r) r
+    down' m (PLUS r) = do
       modifyIORef' count (+1)
-      down (StarC m [] e) e
-    down' m (OPTIONAL e) = do
+      down (StarC m [] r) r
+    down' m (OPTIONAL r) = do
       modifyIORef' count (+1)
-      down (OptionalC m) e
+      down (OptionalC m) r
     down' m r@(NTIMES 0 _) = do
       modifyIORef' count (+1)
       up r m 
-    down' m (NTIMES n e) = do
+    down' m (NTIMES n r) = do
       modifyIORef' count (+1)
-      nu <- nullable e
-      ne <- createExp (NTIMES (n-1) e)
+      nu <- nullable r
+      nr <- createRexp (NTIMES (n-1) r)
       if nu then do
         mBott <- mBottom
         let m' = mBott {
           start = start m
         }
         writeIORef (parents m') [AltC m]
-        down (SeqC m' sBottom [] [ne]) e
-        up (NTIMES (n-1) e) m'
-      else down (SeqC m sBottom [] [ne]) e
-    down' m (RECD s e) = do
+        down (SeqC m' sBottom [] [nr]) r
+        up (NTIMES (n-1) r) m'
+      else down (SeqC m sBottom [] [nr]) r
+    down' m (RECD s r) = do
       modifyIORef' count (+1)
-      down (RecdC m s) e
+      down (RecdC m s) r
     down' m (RANGE cs)
       | Set.member c cs = do
         modifyIORef' count (+1)
         modifyIORef workList (++ [Zipper (SEQ c []) m]) 
       | otherwise = modifyIORef' count (+1)
 
-    up :: Exp' -> Mem -> IO ()
-    up e' m = do
-      e <- eBottom
-      writeIORef (exp' e) e'
+    up :: Rexp' -> Mem -> IO ()
+    up r' m = do
+      r <- rBottom
+      writeIORef (rexp' r) r'
       writeIORef (end m) pos
-      writeIORef (result m) e
+      writeIORef (result m) r
       ps <- readIORef (parents m)
-      mapM_ (up' e) ps
+      mapM_ (up' r) ps
 
-    up' :: Exp -> Context -> IO ()
-    up' e TopC = do
-      modifyIORef tops (++ [e])
-    up' e (SeqC m s es []) = do
+    up' :: Rexp -> Context -> IO ()
+    up' r TopC = do
+      modifyIORef tops (++ [r])
+    up' r (SeqC m s rs []) = do
       modifyIORef' count (+1)
-      up (SEQ s (reverse (e:es))) m
-    up' e (SeqC m s el (er:esr)) = do
+      up (SEQ s (reverse (r:rs))) m
+    up' r (SeqC m s left (r':right)) = do
       modifyIORef' count (+1)
-      nu <- nullable er
+      nu <- nullable r'
       ws <- readIORef workList
-      down (SeqC m s (e:el) esr) er
+      down (SeqC m s (r:left) right) r'
       ws' <- readIORef workList
       if nu && (ws == ws') then do
-        up' e (SeqC m s el esr)
+        up' r (SeqC m s left right)
       else return ()
-    up' e (AltC m) = do
+    up' r (AltC m) = do
       end' <- readIORef (end m)
       if pos == end' then do
         res <- readIORef (result m)
-        e' <- readIORef (exp' res)
-        case e' of
+        r' <- readIORef (rexp' res)
+        case r' of
           (ALT _) -> modifyIORef' count (+1)
           -- ^ We only take the first successful match of the alternate.
           _ -> error "Not an ALT "
       else do
         modifyIORef' count (+1)
-        up (ALT [e]) m
-    up' e (StarC m es e') = do
-      let ct = StarC m (e:es) e'
+        up (ALT [r]) m
+    up' r (StarC m rs r') = do
+      let ct = StarC m (r:rs) r'
       ws' <- readIORef workList 
-      down ct e'
+      down ct r'
       ws <- readIORef workList
       if ws == ws' then do
         modifyIORef' count (+1)
-        up (SEQ sBottom (reverse(e:es))) m
+        up (SEQ sBottom (reverse(r:rs))) m
       else return ()
-    up' e (OptionalC m) = do
-      e' <- readIORef (exp' e)
-      up e' m
+    up' r (OptionalC m) = do
+      r' <- readIORef (rexp' r)
+      up r' m
       modifyIORef' count (+1)
     -- ^ up' on this case is called on a successful first-time match.
-    up' e (RecdC m s) = do
-      up (RECD s e) m
+    up' r (RecdC m s) = do
+      up (RECD s r) m
       modifyIORef' count (+1)
 
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM f xs = concat Prelude.<$> mapM f xs
 
-{-| Takes a list of Exp derived from the `run` function
+{-| Takes a list of Rexp derived from the `run` function
   and returns whether the operation was successful or not.
 -}
-matcher :: [Char] -> Exp -> IO Bool
+matcher :: [Char] -> Rexp -> IO Bool
 matcher s r = do
   res <- run s r
   return (not $ null res)
 
-unwrapTopExp :: Exp -> IO Exp
-unwrapTopExp e = do
-  e' <- readIORef (exp' e)
-  case e' of
-    (SEQ _ es@(_:_)) -> return (last es)
+unwrapTopRexp :: Rexp -> IO Rexp
+unwrapTopRexp r = do
+  r' <- readIORef (rexp' r)
+  case r' of
+    (SEQ _ rs@(_:_)) -> return (last rs)
     _ -> error "Invalid top exp" 
 
-run :: [Char] -> Exp -> IO [Exp]
-run s e = do
-  z <- focus e
+run :: [Char] -> Rexp -> IO [Rexp]
+run s r = do
+  z <- focus r
   writeIORef workList [z]
   run' 0 s
 
-run' :: Int -> [Char] -> IO [Exp]
+run' :: Int -> [Char] -> IO [Rexp]
 run' pos s = do
   ws <- readIORef workList
   writeIORef workList []
@@ -422,12 +448,12 @@ run' pos s = do
       mapM_ (der pos cBottom) ws
       writeIORef workList ws
       ts <- readIORef tops
-      mapM unwrapTopExp ts
+      mapM unwrapTopRexp ts
     (c:cs) -> do
       mapM_ (der pos c) ws
       run' (pos + 1) cs
 
-{-| Flattens an Exp' into a String.
+{-| Flattens an Rexp' into a String.
 
   Based off of Urban's `flatten` from his method of lexing
   with derivatives.
@@ -435,17 +461,17 @@ run' pos s = do
   The reason why the `flatten` method does not have
   extensive matching is because in all terminal cases of `up'`,
   we return a SEQ, ALT or RECD when going back up the zipper, 
-  so there is no need to match any other Exp
+  so there is no need to match any other Rexp
 -}
-flatten :: Exp -> IO [Char]
-flatten e = do
-  e' <- readIORef (exp' e)
-  case e' of
+flatten :: Rexp -> IO [Char]
+flatten r = do
+  r' <- readIORef (rexp' r)
+  case r' of
     (SEQ s []) -> do
       if s == '\0' then return [] else return [s]
-    (SEQ _ es) -> concatMapM flatten es
-    (ALT es) -> flatten (head es)
-    (RECD _ e) -> flatten e
+    (SEQ _ rs) -> concatMapM flatten rs
+    (ALT rs) -> flatten (head rs)
+    (RECD _ r) -> flatten r
     _ -> return ['\0']
 
 {-| Returns a list of (String, String) pairs that will be used
@@ -457,142 +483,142 @@ flatten e = do
   Like `flatten`, the reason why `env` does not have
   extensive matching is because in all terminal cases of `up'`,
   we return a SEQ, ALT or RECD when going back up the zipper, 
-  so there is no need to match any other Exp
+  so there is no need to match any other Rexp
 -}
-env :: Exp -> IO [([Char], [Char])]
-env e = do
-  e' <- readIORef (exp' e)
-  case e' of
+env :: Rexp -> IO [([Char], [Char])]
+env r = do
+  r' <- readIORef (rexp' r)
+  case r' of
     (SEQ _ []) -> return []
-    (SEQ _ es) -> concatMapM env es -- | Continue looking for a RECD...
-    (ALT es) -> env (head es) -- | Continue looking for a RECD...
+    (SEQ _ rs) -> concatMapM env rs -- | Continue looking for a RECD...
+    (ALT rs) -> env (head rs) -- | Continue looking for a RECD...
     (RECD s e) -> do
       v <- flatten e
       vs <- env e
       return ((s, v):vs)
     _ -> return []
 
-lexing :: IO [Exp] -> IO [[([Char], [Char])]]
-lexing esIO = do
-  es <- esIO
-  mapM env es
+lexing :: IO [Rexp] -> IO [[([Char], [Char])]]
+lexing rsIO = do
+  rs <- rsIO
+  mapM env rs
 
 -- | Simplifications - 1 . r == r
-isEmptySeq :: Exp' -> Bool
+isEmptySeq :: Rexp' -> Bool
 isEmptySeq (SEQ _ []) = True
 isEmptySeq _  = False
 
-simp :: Exp' -> IO Exp'
-simp (SEQ s es) = do
-  esFlattened <- flattenSEQ es
-  es'' <- mapM (readIORef . exp') esFlattened
-  es' <- mapM simp es''
+simp :: Rexp' -> IO Rexp'
+simp (SEQ s rs) = do
+  rsFlattened <- flattenSEQ rs
+  rs'' <- mapM (readIORef . rexp') rsFlattened
+  rs' <- mapM simp rs''
 
-  if ALT [] `elem` es'
+  if ALT [] `elem` rs'
   then return (ALT [])
   else do
-    let filteredEs = filter (not . isEmptySeq) es'
-    esSimp <- mapM createExp (filter (not . isEmptySeq) filteredEs)    
-    return (SEQ s esSimp)
+    let filteredEs = filter (not . isEmptySeq) rs'
+    rsSimp <- mapM createRexp (filter (not . isEmptySeq) filteredEs)    
+    return (SEQ s rsSimp)
   where
-    flattenSEQ :: [Exp] -> IO [Exp]
+    flattenSEQ :: [Rexp] -> IO [Rexp]
     flattenSEQ [] = return []
-    flattenSEQ (e:es) = do
-      e' <- readIORef (exp' e)
-      case e' of 
-        (SEQ s' es') | s == s' -> do
-          esFlat' <- flattenSEQ es'
-          esFlat <- flattenSEQ es
-          return (esFlat' ++ esFlat)
+    flattenSEQ (r:rs) = do
+      r' <- readIORef (rexp' r)
+      case r' of 
+        (SEQ s' rs') | s == s' -> do
+          rsFlat' <- flattenSEQ rs'
+          rsFlat <- flattenSEQ rs
+          return (rsFlat' ++ rsFlat)
         _ -> do
-          esFlat <- flattenSEQ es
-          return (e:esFlat)
+          rsFlat <- flattenSEQ rs
+          return (r:rsFlat)
 
-simp (ALT es) = do
-  esFlattened <- flattenALT es
-  es'' <- mapM (readIORef . exp') esFlattened
-  es' <- mapM simp es''
-  let filteredEs = filter (/= ALT []) es'
-  esSimp <- mapM createExp (filter (/= ALT []) filteredEs)
-  return (ALT esSimp)
+simp (ALT rs) = do
+  rsFlattened <- flattenALT rs
+  rs'' <- mapM (readIORef . rexp') rsFlattened
+  rs' <- mapM simp rs''
+  let filteredEs = filter (/= ALT []) rs'
+  rsSimp <- mapM createRexp (filter (/= ALT []) filteredEs)
+  return (ALT rsSimp)
   where
-    flattenALT :: [Exp] -> IO [Exp]
+    flattenALT :: [Rexp] -> IO [Rexp]
     flattenALT [] = return []
-    flattenALT (e:es) = do
-      e' <- readIORef (exp' e)
-      case e' of 
-        (ALT es') -> do
-          esFlat' <- flattenALT es'
-          esFlat <- flattenALT es
-          return (esFlat' ++ esFlat)
+    flattenALT (r:rs) = do
+      r' <- readIORef (rexp' r)
+      case r' of 
+        (ALT rs') -> do
+          rsFlat' <- flattenALT rs'
+          rsFlat <- flattenALT rs
+          return (rsFlat' ++ rsFlat)
         _ -> do
-          esFlat <- flattenALT es
-          return (e:esFlat)
+          rsFlat <- flattenALT rs
+          return (r:rsFlat)
 
-simp e' = return e'
+simp r' = return r'
 
--- | String extensions to make creation of Exps easier.
-stringToExp' :: [Char] -> IO Exp'
-stringToExp' [] = return (SEQ sBottom [])
-stringToExp' [c] = return (CHAR c)
-stringToExp' (c:cs) = do
-  e <- stringToExp [c]
-  es <- mapM (createExp . CHAR) cs
-  return (SEQ sBottom (e:es))
+-- | String extensions to make creation of Rexps easier.
+stringToRexp' :: [Char] -> IO Rexp'
+stringToRexp' [] = return (SEQ sBottom [])
+stringToRexp' [c] = return (CHAR c)
+stringToRexp' (c:cs) = do
+  r <- stringToRexp [c]
+  rs <- mapM (createRexp . CHAR) cs
+  return (SEQ sBottom (r:rs))
 
-stringToExp :: [Char] -> IO Exp
-stringToExp s = do
-  e' <- stringToExp' s
-  createExp e'
+stringToRexp :: [Char] -> IO Rexp
+stringToRexp s = do
+  r' <- stringToRexp' s
+  createRexp r'
 
-class ToExp' a where
-  toExp' :: a -> IO Exp'
+class ToRexp' a where
+  toRexp' :: a -> IO Rexp'
 
-instance ToExp' (IO Exp') where
-  toExp' :: IO Exp' -> IO Exp'
-  toExp' = id
+instance ToRexp' (IO Rexp') where
+  toRexp' :: IO Rexp' -> IO Rexp'
+  toRexp' = id
 
-instance ToExp' Exp' where
-  toExp' :: Exp' -> IO Exp'
-  toExp' = return
+instance ToRexp' Rexp' where
+  toRexp' :: Rexp' -> IO Rexp'
+  toRexp' = return
 
-instance ToExp' Exp where
-  toExp' :: Exp -> IO Exp'
-  toExp' e = readIORef (exp' e)
+instance ToRexp' Rexp where
+  toRexp' :: Rexp -> IO Rexp'
+  toRexp' r = readIORef (rexp' r)
 
-instance ToExp' (IO Exp) where
-  toExp' :: IO Exp -> IO Exp'
-  toExp' eIO = do
-    e <- eIO
-    readIORef (exp' e)
+instance ToRexp' (IO Rexp) where
+  toRexp' :: IO Rexp -> IO Rexp'
+  toRexp' rIO = do
+    r <- rIO
+    readIORef (rexp' r)
 
-instance ToExp' String where
-  toExp' = stringToExp'
+instance ToRexp' String where
+  toRexp' = stringToRexp'
 
 
-class ToExp a where
-  toExp :: a -> IO Exp
+class ToRexp a where
+  toRexp :: a -> IO Rexp
 
-instance ToExp Exp where
-  toExp :: Exp -> IO Exp
-  toExp = return
+instance ToRexp Rexp where
+  toRexp :: Rexp -> IO Rexp
+  toRexp = return
 
-instance ToExp (IO Exp) where
-  toExp :: IO Exp -> IO Exp
-  toExp = id
+instance ToRexp (IO Rexp) where
+  toRexp :: IO Rexp -> IO Rexp
+  toRexp = id
 
-instance ToExp (IO Exp') where
-  toExp :: IO Exp' -> IO Exp
-  toExp eIO' = do
-    e' <- eIO'
-    createExp e'
+instance ToRexp (IO Rexp') where
+  toRexp :: IO Rexp' -> IO Rexp
+  toRexp rIO' = do
+    r' <- rIO'
+    createRexp r'
 
-instance ToExp Exp' where
-  toExp :: Exp' -> IO Exp
-  toExp = createExp
+instance ToRexp Rexp' where
+  toRexp :: Rexp' -> IO Rexp
+  toRexp = createRexp
 
-instance ToExp String where
-  toExp = stringToExp
+instance ToRexp String where
+  toRexp = stringToRexp
 
 infixl 9 ^>
 infixl 8 ?>
@@ -602,42 +628,42 @@ infixl 4 <~>
 infixl 3 <|>
 infixl 1 <$>
 
-(<~>) :: (ToExp a, ToExp b) => a -> b -> IO Exp
+(<~>) :: (ToRexp a, ToRexp b) => a -> b -> IO Rexp
 a <~> b = do
-  ae <- toExp a
-  be <- toExp b
-  createExp (SEQ '\0' [ae,be])
+  ae <- toRexp a
+  be <- toRexp b
+  createRexp (SEQ '\0' [ae,be])
 
-(<|>) :: (ToExp a, ToExp b) => a -> b -> IO Exp
+(<|>) :: (ToRexp a, ToRexp b) => a -> b -> IO Rexp
 a <|> b = do
-  ae <- toExp a
-  be <- toExp b
-  createExp (ALT [ae, be])
+  ae <- toRexp a
+  be <- toRexp b
+  createRexp (ALT [ae, be])
 
-(<$>) :: ToExp a => String -> a -> IO Exp
+(<$>) :: ToRexp a => String -> a -> IO Rexp
 s <$> a = do
-  e <- toExp a
-  createExp (RECD s e)
+  e <- toRexp a
+  createRexp (RECD s e)
 
-(*>) :: ToExp a => a -> b -> IO Exp
+(*>) :: ToRexp a => a -> b -> IO Rexp
 a *> _ = do
-  e <- toExp a
-  createExp (STAR e)
+  e <- toRexp a
+  createRexp (STAR e)
 
-(+>) :: ToExp a => a -> b -> IO Exp
+(+>) :: ToRexp a => a -> b -> IO Rexp
 a +> _ = do
-  e <- toExp a
-  createExp (PLUS e)
+  e <- toRexp a
+  createRexp (PLUS e)
 
-(?>) :: ToExp a => a -> b -> IO Exp
+(?>) :: ToRexp a => a -> b -> IO Rexp
 a ?> _ = do
-  e <- toExp a
-  createExp (OPTIONAL e)
+  e <- toRexp a
+  createRexp (OPTIONAL e)
 
-(^>) :: ToExp a => a -> Int -> IO Exp
+(^>) :: ToRexp a => a -> Int -> IO Rexp
 a ^> n = do
-  e <- toExp a
-  createExp (NTIMES n e)
+  e <- toRexp a
+  createRexp (NTIMES n e)
 
 -- | pretty-printing (ish) Zippers
 implode :: [[Char]] -> [Char]
@@ -660,27 +686,27 @@ indent :: [[Char]] -> [Char]
 indent [] = ""
 indent ss = implode $ map mid (init ss) ++ [lst (last ss)]
 
-pps :: [Exp] -> String
-pps es = indent (map ppe es)
+pps :: [Rexp] -> String
+pps rs = indent (map ppe rs)
 
-ppe :: Exp -> String
-ppe (Exp _ e') =
+ppe :: Rexp -> String
+ppe (Rexp _ r') =
   "EXP\n" ++
-  indent ("Mem: { ... }" : [ppe' (unsafePerformIO (readIORef e'))])
+  indent ("Mem: { ... }" : [ppe' (unsafePerformIO (readIORef r'))])
 
-ppe' :: Exp' -> String
+ppe' :: Rexp' -> String
 ppe' (CHAR c)     = c : "\n"
-ppe' (SEQ s es)  =  (if null es then "SEQ "++[s] else "SEQ\n" ++ pps es) ++ "\n"
-ppe' (ALT es) = (if null es then "ALT []\n" else "ALT\n"++pps es) ++ "\n"
+ppe' (SEQ s rs)  =  (if null rs then "SEQ "++[s] else "SEQ\n" ++ pps rs) ++ "\n"
+ppe' (ALT rs) = (if null rs then "ALT []\n" else "ALT\n"++ pps rs) ++ "\n"
 ppe' (RANGE cs) = Set.showTreeWith True False cs ++ "\n"
-ppe' (STAR e) = "STAR\n" ++ indent [ppe e]
-ppe' (PLUS e) = "PLUS\n" ++ indent [ppe e]
-ppe' (OPTIONAL e) = "OPTIONAL\n" ++ indent [ppe e]
-ppe' (NTIMES n e) = "NTIMES " ++ show n ++ "\n" ++ indent [ppe e]
-ppe' (RECD s e) = "RECD " ++ s ++ "\n" ++ indent [ppe e]
+ppe' (STAR r) = "STAR\n" ++ indent [ppe r]
+ppe' (PLUS r) = "PLUS\n" ++ indent [ppe r]
+ppe' (OPTIONAL r) = "OPTIONAL\n" ++ indent [ppe r]
+ppe' (NTIMES n r) = "NTIMES " ++ show n ++ "\n" ++ indent [ppe r]
+ppe' (RECD s r) = "RECD " ++ s ++ "\n" ++ indent [ppe r]
 
 ppz :: Zipper -> String
-ppz (Zipper e' m) = "ZIP\n" ++ indent (ppe' e':[ppm m])
+ppz (Zipper r' m) = "ZIP\n" ++ indent (ppe' r':[ppm m])
 
 ppm :: Mem -> String
 ppm (Mem st en ps res) =
@@ -696,7 +722,7 @@ ppctx :: Context -> String
 ppctx TopC = "TOP\n"
 ppctx (SeqC m _ _ _) = "SEQC\n" ++ indent [ppm m]
 ppctx (AltC m) = "ALTC\n" ++ indent [ppm m]
-ppctx (StarC m es e) = "STARC\n" ++ indent [ppm m]
+ppctx (StarC m rs r) = "STARC\n" ++ indent [ppm m]
 -- ppctx (PlusC m es e) = "PLUSC\n" ++ indent [ppm m]
 ppctx (OptionalC m) = "OPTIONALC\n" ++ indent [ppm m]
 -- ppctx (NTimesC m n es e) = "NTIMESC " ++ show n ++ "\n" ++ indent [ppm m]

@@ -5,48 +5,48 @@ import Token
 import qualified Data.Set as Set
 
 {- WHILE Language registers - NOTE: doesn't work rn -}
-keyword :: Exp
+keyword :: Rexp
 keyword = "while" <|> "if" <|> "then" <|> "else" <|> "do" <|> "for" <|>
           "to" <|> "true" <|> "false" <|> "read" <|> "write" <|>
           "skip" <|> "break"
 
-op :: Exp
+op :: Rexp
 op = ">" <|> "<" <|> "==" <|> "!=" <|> "<=" <|> ">=" <|> ":=" <|> "&&" <|> "||" <|> "+" <|> "-" <|> "*" <|> "%" <|> "/"
 
-lett :: Exp
+lett :: Rexp
 lett = RANGE $ Set.fromList (['A'..'Z'] ++ ['a'..'z'])
 
-sym :: Exp
+sym :: Rexp
 sym = lett <|> RANGE (Set.fromList ['.', '_', '>', '<', '=', ';', ',', '\\', ':'])
 
-parens :: Exp
+parens :: Rexp
 parens = RANGE $ Set.fromList ['(', ')', '{', '}']
 
-digit :: Exp
+digit :: Rexp
 digit = RANGE $ Set.fromList ['0'..'9']
 
-semi :: Exp
-semi = toExp ";"
+semi :: Rexp
+semi = toRexp ";"
 
-whitespace :: Exp
+whitespace :: Rexp
 whitespace = (" " <|> "\n" <|> "\t" <|> "\r") RexpZipper.+> ()
 
-identifier :: Exp
+identifier :: Rexp
 identifier = lett <~> (("_" <|> lett <|> digit) RexpZipper.*> ())
 
-numbers :: Exp
+numbers :: Rexp
 numbers = "0" <|> (RANGE (Set.fromList ['1'..'9']) <~> (digit RexpZipper.*> ()))
 
-string :: Exp
+string :: Rexp
 string = "\"" <~> ((sym <|> digit <|> parens <|> whitespace <|> "\n") RexpZipper.*> ()) <~> "\""
 
-eol :: Exp
+eol :: Rexp
 eol = "\n" <|> "\r\n"
 
-comment :: Exp
-comment = "//" <~> ((sym <|> parens <|> digit <|> toExp " " RexpZipper.*> ()) RexpZipper.*> ()) <~> eol
+comment :: Rexp
+comment = "//" <~> ((sym <|> parens <|> digit <|> toRexp " " RexpZipper.*> ()) RexpZipper.*> ()) <~> eol
 
-whileRegs :: Exp
+whileRegs :: Rexp
 whileRegs = (("k" RexpZipper.<$> keyword)
             <|> ("c" RexpZipper.<$> comment)
             <|> ("o" RexpZipper.<$> op)

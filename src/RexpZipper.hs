@@ -8,41 +8,41 @@ import Data.List (intercalate)
 
 type Sym = Char
 
-data Exp = ZERO
+data Rexp = ZERO
             | ONE
             | CHAR Char
             | RANGE (Set.Set Char)
-            | SEQ Sym [Exp]
-            | ALT [Exp]
-            | STAR Exp
-            | PLUS Exp
-            | OPTIONAL Exp
-            | NTIMES Int Exp
-            | RECD [Char] Exp
+            | SEQ Sym [Rexp]
+            | ALT [Rexp]
+            | STAR Rexp
+            | PLUS Rexp
+            | OPTIONAL Rexp
+            | NTIMES Int Rexp
+            | RECD [Char] Rexp
             deriving (Ord, Eq, Show)
 
 {-
-    Default constructors for Exps that remember how 
+    Default constructors for Rexps that remember how 
     they were matched.
 
     They all start off with having an empty list.
 -}
 
-defaultSEQ :: [Exp] -> Exp
+defaultSEQ :: [Rexp] -> Rexp
 defaultSEQ = SEQ sBottom
 
 data Context = TopC
-            | SeqC Context Sym [Exp] [Exp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
+            | SeqC Context Sym [Rexp] [Rexp] -- Sequence that has its own context, the symbol it represented, left siblings (processed), right siblings (unprocessed)
             | AltC Context -- Alternate has one context shared between its children
-            | StarC Context [Exp] Exp
+            | StarC Context [Rexp] Rexp
             | OptionalC Context
-            | NTimesC Context Int [Exp] Exp
+            | NTimesC Context Int [Rexp] Rexp
             | RecdC Context [Char]
             deriving (Ord, Eq, Show)
 
-data Zipper = Zipper Exp Context deriving (Ord, Eq, Show)
+data Zipper = Zipper Rexp Context deriving (Ord, Eq, Show)
 
-instance Arbitrary Exp where
+instance Arbitrary Rexp where
     arbitrary = oneof
         [ return ZERO
         , return ONE
@@ -54,9 +54,9 @@ instance Arbitrary Exp where
         ]
 
 {- 
-    Whether an Exp is nullable (can match the empty string).
+    Whether an Rexp is nullable (can match the empty string).
 -}
-nullable :: Exp -> Bool
+nullable :: Rexp -> Bool
 nullable ZERO = False
 nullable ONE = True
 nullable (CHAR _) = False
@@ -81,11 +81,11 @@ sBottom = '\0'
     the expression.
 -}
 
-focus :: Exp -> Zipper
+focus :: Rexp -> Zipper
 focus r = Zipper (SEQ sBottom []) (SeqC TopC sBottom [] [r, CHAR cBottom])
 
 {-
-    Derives the result of an Exp from one character:
+    Derives the result of an Rexp from one character:
     The semantic derivative on a language L wrt a character c
     is as follows: Der L c = { s | c:s is in L }
 
@@ -96,14 +96,14 @@ focus r = Zipper (SEQ sBottom []) (SeqC TopC sBottom [] [r, CHAR cBottom])
     It has two functions:
     up - moves back up the zipper via its given Context 
     (the parent it can traverse upwards from)
-    down - moves down the zipper via its given Exp 
+    down - moves down the zipper via its given Rexp 
     (the child it can traverse downwards from)
  
 -}
 der ::  Char -> Zipper -> [Zipper]
 der c (Zipper re ctx) = up re ctx
     where
-    down :: Context -> Exp -> [Zipper]
+    down :: Context -> Rexp -> [Zipper]
     down _ ZERO = []
     down _ ONE = []
     down ct (CHAR d)
@@ -113,58 +113,52 @@ der c (Zipper re ctx) = up re ctx
         | Set.member c cs = [Zipper (SEQ c []) ct]
         | otherwise = []
     down ct r@(SEQ _ []) = up r ct
-    down ct (SEQ s (e:es)) =
-        if nullable e then
-            case es of
-                [] -> down (SeqC ct s [] es) e
-                (er:esr) ->
-                    let z1 = down (SeqC ct s [] es) e
-                        z2 = down (SeqC ct s [] esr) er
+    down ct (SEQ s (r:rs)) =
+        if nullable r then
+            case rs of
+                [] -> down (SeqC ct s [] rs) r
+                (r':rs') ->
+                    let z1 = down (SeqC ct s [] rs) r
+                        z2 = down (SeqC ct s [] rs') r'
                     in z1 ++ z2
-        else down (SeqC ct s [] es) e
-    down ct (ALT es) = concatMap (down (AltC ct)) es
-    down ct (STAR e) = down (StarC ct [] e) e
-    down ct (PLUS e) = down (StarC ct [] e) e
-    down ct (OPTIONAL e) = down (OptionalC ct) e
+        else down (SeqC ct s [] rs) r
+    down ct (ALT rs) = concatMap (down (AltC ct)) rs
+    down ct (STAR r) = down (StarC ct [] r) r
+    down ct (PLUS r) = down (StarC ct [] r) r
+    down ct (OPTIONAL r) = down (OptionalC ct) r
     down ct r@(NTIMES 0 _) = up r ct
-    down ct (NTIMES n e) =
-        let e' = NTIMES (n-1) e
-            ctt = SeqC ct sBottom [] [e']
-            zs = down ctt e
+    down ct (NTIMES n r) =
+        let r' = NTIMES (n-1) r
+            ctt = SeqC ct sBottom [] [r']
+            zs = down ctt r
         in 
-            if nullable e then
-                let zs' = up e' ct
+            if nullable r then
+                let zs' = up r' ct
                 in (zs ++ zs')
             else zs
     down ct (RECD s r') = down (RecdC ct s) r'
 
-    up :: Exp -> Context -> [Zipper]
+    up :: Rexp -> Context -> [Zipper]
     up _ TopC = []
-    up e (SeqC ct s es []) = up (SEQ s (reverse (e:es))) ct
-    up e (SeqC ct s el (er:esr)) =
-        let zs = down (SeqC ct s (e:el) esr) er
-        in if nullable er && null zs then
-            up e (SeqC ct s el esr)
+    up r (SeqC ct s rs []) = up (SEQ s (reverse (r:rs))) ct
+    up r (SeqC ct s left (r':right)) =
+        let zs = down (SeqC ct s (r:left) right) r'
+        in if nullable r' && null zs then
+            up r (SeqC ct s left right)
         else zs
-    up e (AltC ct) = up (ALT [e]) ct
-    up e (StarC ct es r) =
-        let zs = down (StarC ct (e:es) r) r in
+    up r (AltC ct) = up (ALT [r]) ct
+    up r (StarC ct rs r') =
+        let zs = down (StarC ct (r:rs) r') r' in
             if null zs then
-                up (defaultSEQ (reverse (e:es))) ct
+                up (defaultSEQ (reverse (r:rs))) ct
             else zs
-    up e (OptionalC ct) = up e ct
-    up e (NTimesC ct 0 es _) = up (defaultSEQ (reverse (e:es))) ct
-    up e (NTimesC ctt n es r) =
-        if nullable e then
-            down (NTimesC ctt (n-1) (e:es) r) r
-            ++ down (NTimesC ctt (n-1) es r) r
-        else
-            down (NTimesC ctt (n-1) (e:es) r) r
-    up e (RecdC ct s) = up (RECD s e) ct
+    up r (OptionalC ct) = up r ct
+    up r (NTimesC ct 0 rs _) = up (defaultSEQ (reverse (r:rs))) ct
+    up r (RecdC ct s) = up (RECD s r) ct
 
 {-
-    Derives an Exp from a String (List of characters)
-    It does so by taking successive derivatives on the Exp
+    Derives an Rexp from a String (List of characters)
+    It does so by taking successive derivatives on the Rexp
     wrt each front character of the string, until there are
     no more characters in the string to process.
 
@@ -177,7 +171,7 @@ ders (c:cs) zs = ders cs (concatMap (der c) zs)
 getNullableZippers :: [Zipper] -> [Zipper]
 getNullableZippers = concatMap (\z@(Zipper r' ct) -> ([z | nullable r' && isNullable ct]))
 
-matcher :: [Char] -> Exp -> Bool
+matcher :: [Char] -> Rexp -> Bool
 matcher [] r = nullable r
 matcher s r =
     let zs = ders s [focus r] in
@@ -203,78 +197,68 @@ isNullable (RecdC ct _) = isNullable ct
 
 {-
     Returns the lexed result from taking successive 
-    derivatives on the Exp wrt the string.
+    derivatives on the Rexp wrt the string.
 -}
-lexing :: [Char] -> Exp -> [Exp]
-lexing cs e = map getExpFromZipper (ders cs [focus e])
+lexing :: [Char] -> Rexp -> [Rexp]
+lexing cs r = map getRexpFromZipper (ders cs [focus r])
 
-lexSimp :: [Char] -> Exp -> [[([Char], [Char])]]
+lexSimp :: [Char] -> Rexp -> [[([Char], [Char])]]
 lexSimp s r = map env (lexing s r)
 
-getExpFromZipper :: Zipper -> Exp
-getExpFromZipper (Zipper _ (SeqC TopC _ es _)) = head es
-getExpFromZipper _ = error "not valid structure"
+getRexpFromZipper :: Zipper -> Rexp
+getRexpFromZipper (Zipper _ (SeqC TopC _ rs _)) = head rs
+getRexpFromZipper _ = error "not valid structure"
 
-plug :: Exp -> Context -> Zipper
-plug e (SeqC TopC _ _ _) = Zipper e TopC
-plug e (SeqC ct s es _) = plug (SEQ s (reverse (e:es))) ct
-plug e (AltC ct) = plug e ct
-plug e (StarC ct es _) = plug (STAR (defaultSEQ (reverse (e:es)))) ct
-plug e (NTimesC ct 0 es _) = plug (NTIMES 0 (defaultSEQ (reverse (e:es)))) ct
-plug e (RecdC ct s) = plug (RECD s e) ct
+plug :: Rexp -> Context -> Zipper
+plug r (SeqC TopC _ _ _) = Zipper r TopC
+plug r (SeqC ct s rs _) = plug (SEQ s (reverse (r:rs))) ct
+plug r (AltC ct) = plug r ct
+plug r (StarC ct rs _) = plug (STAR (defaultSEQ (reverse (r:rs)))) ct
+plug r (NTimesC ct 0 es _) = plug (NTIMES 0 (defaultSEQ (reverse (r:es)))) ct
+plug r (RecdC ct s) = plug (RECD s r) ct
 plug _ _ = error "Could not find a path from the leaf to the root"
 
-flatten :: Exp -> [Char]
-flatten ZERO = error "Cannot flatten ZERO"
-flatten ONE = []
-flatten (CHAR _) = []
-flatten (RANGE _) = []
+flatten :: Rexp -> [Char]
 flatten (SEQ c [])
     | c == sBottom = []
     | otherwise = [c]
-flatten (SEQ s es)
-    | s == sBottom = concatMap flatten es
-    | otherwise = s:concatMap flatten es
-flatten (ALT es) = concatMap flatten es
-flatten (STAR e) = flatten e
-flatten (NTIMES _ e) = flatten e
-flatten (RECD _ e) = flatten e
+flatten (SEQ s rs)
+    | s == sBottom = concatMap flatten rs
+    | otherwise = s:concatMap flatten rs
+flatten (ALT rs) = concatMap flatten rs
+flatten (RECD _ r) = flatten r
 
-env :: Exp -> [([Char], [Char])]
-env ZERO = error "ZERO is an invalid input for `env`"
-env ONE = []
-env (CHAR _) = []
-env (RANGE _) = []
-env (ALT es) = concatMap env es
-env (SEQ _ es) = concatMap env es
-env (STAR e) = env e
-env (NTIMES _ e) = env e
-env (RECD s e) = (s, flatten e) : env e
+env :: Rexp -> [([Char], [Char])]
+env (ALT rs) = concatMap env rs
+env (SEQ _ rs) = concatMap env rs
+env (STAR r) = env r
+env (NTIMES _ r) = env r
+env (RECD s r) = (s, flatten r) : env r
 
-simp :: Exp -> Exp
-simp (SEQ s es) = SEQ s (map simp (filter (/= ONE) es))
-simp (ALT es) = ALT (map simp (filter (/= ZERO) es))
-simp (STAR (STAR e)) = simp (STAR e)
+simp :: Rexp -> Rexp
+simp (SEQ s rs) = SEQ s (map simp (filter (/= ONE) rs))
+simp (ALT rs) = ALT (map simp (filter (/= ZERO) rs))
+simp (STAR (STAR r)) = simp (STAR r)
 simp r = r
 
 {- 
     Converting a string to a regular expression 
     without explicitly using the constructors. 
 -}
-stringToExp :: [Char] -> Exp
-stringToExp [] = ONE
-stringToExp [c] = CHAR c
-stringToExp (c:cs) = defaultSEQ (CHAR c:map CHAR cs)
+stringToRexp :: [Char] -> Rexp
+stringToRexp [] = ONE
+stringToRexp [c] = CHAR c
+stringToRexp (c:cs) = defaultSEQ (CHAR c:map CHAR cs)
 
-class ToExp a where
-  toExp :: a -> Exp
+class ToRexp a where
+  toRexp :: a -> Rexp
 
-instance ToExp Exp where
-  toExp :: Exp -> Exp
-  toExp = id
+instance ToRexp Rexp where
+  toRexp :: Rexp -> Rexp
+  toRexp = id
 
-instance ToExp String where
-  toExp = stringToExp
+instance ToRexp String where
+  toRexp = stringToRexp
 
 infixl 9 ^>
 infixl 8 ?>
@@ -284,34 +268,34 @@ infixl 4 <~>
 infixl 3 <|>
 infixl 1 <$>
 
-(<~>) :: (ToExp a, ToExp b) => a -> b -> Exp
+(<~>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
 a <~> b =
-    case (toExp a, toExp b) of
+    case (toRexp a, toRexp b) of
         (SEQ _ xs, SEQ _ ys) -> defaultSEQ (xs ++ ys)
         (ae, be) -> defaultSEQ [ae,be]
 
-(<|>) :: (ToExp a, ToExp b) => a -> b -> Exp
+(<|>) :: (ToRexp a, ToRexp b) => a -> b -> Rexp
 a <|> b =
-    case (toExp a, toExp b) of
+    case (toRexp a, toRexp b) of
     (ALT xs, ALT ys) -> ALT (xs ++ ys)
     (ALT xs, be) -> ALT (xs ++ [be])
     (ae, ALT ys) -> ALT (ae:ys)
     (ae, be) -> ALT [ae, be]
 
-(<$>) :: String -> Exp -> Exp
+(<$>) :: String -> Rexp -> Rexp
 s <$> r = RECD s r
 
-(*>) :: ToExp a => a -> b -> Exp
-r *> _ = STAR (toExp r)
+(*>) :: ToRexp a => a -> b -> Rexp
+r *> _ = STAR (toRexp r)
 
-(+>) :: ToExp a => a -> b -> Exp
-r +> _ = PLUS (toExp r)
+(+>) :: ToRexp a => a -> b -> Rexp
+r +> _ = PLUS (toRexp r)
 
-(?>) :: ToExp a => a -> b -> Exp
-r ?> _ = OPTIONAL (toExp r)
+(?>) :: ToRexp a => a -> b -> Rexp
+r ?> _ = OPTIONAL (toRexp r)
 
-(^>) :: ToExp a => a -> Int -> Exp
-r ^> n = NTIMES n (toExp r)
+(^>) :: ToRexp a => a -> Int -> Rexp
+r ^> n = NTIMES n (toRexp r)
 
 
 -- pretty-printing REGs
@@ -335,19 +319,19 @@ indent :: [[Char]] -> [Char]
 indent [] = ""
 indent ss = implode $ map mid (init ss) ++ [lst (last ss)]
 
-pps :: [Exp] -> String
+pps :: [Rexp] -> String
 pps es = indent (map pp es)
 
-pp :: Exp -> String
+pp :: Rexp -> String
 pp ZERO        = "0\n"
 pp ONE         = "1\n"
 pp (CHAR c)     = c : "\n"
 pp (RANGE cs)     = Set.showTreeWith True False cs ++ "\n"
-pp (SEQ s es)  =  (if null es then [s] else "SEQ\n" ++ pps es) ++ "\n"
-pp (ALT es) = "ALT\n" ++ pps es
-pp (STAR e)    = "STAR\n" ++ pp e
-pp (RECD s e)    = "RECD\n" ++ s ++ "\n" ++ pp e
-pp (NTIMES n e)    = "NTIMES\n" ++ show n ++ " " ++ pp e ++ "\n"
+pp (SEQ s rs)  =  (if null rs then [s] else "SEQ\n" ++ pps rs) ++ "\n"
+pp (ALT rs) = "ALT\n" ++ pps rs
+pp (STAR r)    = "STAR\n" ++ pp r
+pp (RECD s r)    = "RECD\n" ++ s ++ "\n" ++ pp r
+pp (NTIMES n r)    = "NTIMES\n" ++ show n ++ " " ++ pp r ++ "\n"
 
 ppz :: Zipper -> String
 ppz (Zipper r ct) = "ZIP\n" ++ indent (pp r:[ppctx ct])
