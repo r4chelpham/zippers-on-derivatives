@@ -1,6 +1,6 @@
 module Benchmark where
 
-import Criterion.Main
+import Criterion.Main(defaultMain, bench, nf, nfIO)
 import Token
 import Rexp
 

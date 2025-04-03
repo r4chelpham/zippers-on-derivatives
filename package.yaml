@@ -26,7 +26,7 @@ dependencies:
 - QuickCheck >= 2.14.3
 - hspec-discover
 - memoize >= 1.1.2
-- criterion
+- criterion >= 1.6.4.0
 - deepseq >= 1.4.8.1
 
 ghc-options:

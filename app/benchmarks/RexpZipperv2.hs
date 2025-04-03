@@ -14,7 +14,7 @@ main = do
     let benchmarks = zipWith makeBenchmark strings (lengths ++ [100000])
     defaultMain benchmarks
 
-    let lengths = [5, 10, 20, 25, 50, 100, 1000, 10000]
+    let lengths = [5, 10, 20, 25, 50, 100, 1000]
 
     let rexpGen n = ("a" Z.?> ()) Z.^> n Z.<~> ("a" Z.^> n)
 
