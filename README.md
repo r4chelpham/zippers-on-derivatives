@@ -1,6 +1,6 @@
 # zippers-on-derivatives
 
-This is the repository for the artifact associated with Zippers on Derivatives authored by Rachel Pham as part of a final year undergraduate dissertation.
+This is the repository for the artifact associated with Zippers on Derivatives, a final year undergraduate dissertation.
 
 This artifact includes 3 implementations:
 - Matching and lexing with zippers from Efficient Parsing with Derivatives and Zippers (Edelmann)
