@@ -23,19 +23,11 @@ The project requires GHC (Glasgow Haskell Compiler) version 8.8.4.
 This project requires WSL version 2 (if you are using Windows)
 
 ### Instructions
-1. Clone the repository
-```
-git clone git@github.com:r4chelpham/zippers-on-derivatives.git
-```
-2. Install Stack
+1. Install Stack
 ```
 sudo apt install haskell-stack
 ```
-3. Pull from main
-```
-git pull origin main
-``` 
-4. Run the following commands
+2. Run the following commands
 ```
 stack upgrade --force-download
 stack clean --full
