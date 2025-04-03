@@ -25,7 +25,7 @@ This project requires WSL version 2 (if you are using Windows)
 ### Instructions
 1. Clone the repository
 ```
-git clone <this repository link>
+git clone git@github.com:r4chelpham/zippers-on-derivatives.git
 ```
 2. Install Stack
 ```
@@ -38,7 +38,7 @@ git pull origin main
 4. Run the following commands
 ```
 stack upgrade --force-download
-stack clean
+stack clean --full
 stack setup
 stack build
 ```
