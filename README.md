@@ -27,6 +27,8 @@ This project requires WSL version 2 (if you are using Windows)
 ```
 sudo apt install haskell-stack
 ```
+> You may have to install GHC as well: `sudo apt install ghc`
+
 2. Run the following commands
 ```
 stack upgrade --force-download
