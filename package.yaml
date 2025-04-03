@@ -59,7 +59,9 @@ executables:
 tests:
   zippers-on-derivatives-test:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:         
+    - test
+    - test/arbitrary
     ghc-options:
     - -threaded
     - -rtsopts
@@ -68,6 +70,16 @@ tests:
     - zippers-on-derivatives
 
 benchmarks:
+  load-testing:
+    main: app/benchmarks/LoadTest.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+    dependencies:
+      - base >= 4.7 && < 5
+      - criterion
+      - zippers-on-derivatives
+
   rexp-matching:
     main: app/benchmarks/Rexp.hs
     ghc-options:
@@ -147,14 +159,3 @@ benchmarks:
       - base >= 4.7 && < 5
       - criterion
       - zippers-on-derivatives
-
-  load-testing:
-    main: app/benchmarks/LoadTest.hs
-    ghc-options:
-      - -threaded
-      - -rtsopts
-    dependencies:
-      - base >= 4.7 && < 5
-      - criterion
-      - zippers-on-derivatives
-

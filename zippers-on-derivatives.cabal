@@ -90,11 +90,14 @@ test-suite zippers-on-derivatives-test
       ValSpec
       ZipperLexerSpec
       ZipperLexerv2Spec
+      RexpA
+      RexpB
       Paths_zippers_on_derivatives
   autogen-modules:
       Paths_zippers_on_derivatives
   hs-source-dirs:
       test
+      test/arbitrary
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck >=2.14.3
@@ -111,6 +114,106 @@ test-suite zippers-on-derivatives-test
 benchmark edelmann
   type: exitcode-stdio-1.0
   main-is: app/benchmarks/Edelmann.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark edelmann-matching
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/EdelmannZipper.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark load-testing
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/LoadTest.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark rexp-matching
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/Rexp.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark rexpzipper-matching
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/RexpZipper.hs
+  other-modules:
+      Paths_zippers_on_derivatives
+  autogen-modules:
+      Paths_zippers_on_derivatives
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fno-cse -fno-full-laziness -threaded -rtsopts
+  build-depends:
+      QuickCheck >=2.14.3
+    , base >=4.7 && <5
+    , containers
+    , criterion
+    , deepseq >=1.4.8.1
+    , hspec >=2.11.10
+    , hspec-discover
+    , memoize >=1.1.2
+    , zippers-on-derivatives
+  default-language: Haskell2010
+
+benchmark rexpzipperv2-matching
+  type: exitcode-stdio-1.0
+  main-is: app/benchmarks/RexpZipperv2.hs
   other-modules:
       Paths_zippers_on_derivatives
   autogen-modules:

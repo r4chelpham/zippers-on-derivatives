@@ -7,7 +7,6 @@ import Rexp
 import RexpA
 import Val
 
-
 spec :: Spec
 spec = do
     describe "mkeps" $ do
@@ -51,21 +50,21 @@ spec = do
 
         it "returns a Pls for a PLUS" $ property $ 
             \r -> 
-                nullable (Rexp.PLUS r) ==>
+                nullable (PLUS r) ==>
                     case Lexer.mkeps (PLUS r) of 
                         Val.Pls _ -> True
                         _ -> False
         
         it "returns an empty NX for a NTIMES with n == 0" $ property $ 
             \r-> 
-                case Lexer.mkeps (Rexp.NTIMES r 0) of 
+                case Lexer.mkeps (NTIMES r 0) of 
                     Val.NX [] -> True
                     _ -> False
         
         it "returns a NX for a NTIMES with n > 0" $  property $ 
             \r n-> 
-                nullable (Rexp.NTIMES r n) ==>
-                    case Lexer.mkeps (Rexp.NTIMES r n) of 
+                nullable (NTIMES r n) ==>
+                    case Lexer.mkeps (NTIMES r n) of 
                         Val.NX _ -> True
                         _ -> False
 

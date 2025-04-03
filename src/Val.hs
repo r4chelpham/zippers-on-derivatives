@@ -1,5 +1,4 @@
 module Val where
-import Test.QuickCheck
 
 data Val = Empty
         | Chr Char
@@ -11,18 +10,6 @@ data Val = Empty
         | Pls [Val]
         | Opt Val
         | NX [Val] deriving (Show, Eq)
-
--- We define an Arbitrary instance of Val for property testing purposes.
-instance Arbitrary Val where
-  arbitrary = oneof [ return Empty
-                    , Chr <$> arbitrary
-                    , Sequ <$> arbitrary <*> arbitrary
-                    , Val.Left <$> arbitrary
-                    , Val.Right <$> arbitrary
-                    , Stars <$> arbitrary
-                    , Rec <$> arbitrary <*> arbitrary
-                    ]
-
 
 flatten :: Val -> String
 flatten Empty = ""
