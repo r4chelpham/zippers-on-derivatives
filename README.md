@@ -85,6 +85,7 @@ You can run the tests by using this command:
 ```
 stack test
 ```
+> NOTE: Some tests do not pass. This is because of various challenges such as `RexpZipper` and `RexpZipperv2` not adhering to POSIX standards, and Edelmann's lexer not lexing invalid programs properly. This is detailed further in the evaluation of my report.
 
 #### Experimenting
 If you want to have a go at using the matcher and lexer yourself, you can do so in GHCi, Haskell's interactive environment.
