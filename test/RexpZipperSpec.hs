@@ -2,6 +2,7 @@ module RexpZipperSpec where
 
 import Test.QuickCheck
 import Test.Hspec
+import Test.Hspec.QuickCheck
 import Control.Exception (evaluate)
 import qualified RexpZipper as Z
 import qualified RexpB
@@ -10,13 +11,14 @@ import qualified RexpB
 spec :: Spec
 spec = do
     describe "focus" $ do
-        it "creates a zipper with the given expression" $ do
-            let Z.Zipper r _ = Z.focus (Z.CHAR 'a')
-            r `shouldBe` Z.SEQ '\0' []
+        prop "creates a zipper with the given expression" $ do
+            \r -> do
+                let (Z.Zipper r' ct) = Z.focus r
+                r' `shouldBe` Z.SEQ '\0' []
     describe "der" $ do
         it "derivative of a character with itself produces an empty SEQ" $ do
             let result = Z.der 'a' (Z.focus (Z.CHAR 'a'))
-            result `shouldBe` [Z.Zipper (Z.SEQ 'a' []) (Z.SeqC Z.TopC '\NUL' [Z.SEQ '\0' []] [Z.CHAR '\0'])]
+            result `shouldBe` [Z.Zipper (Z.SEQ 'a' []) (Z.SeqC Z.TopC '\0' [Z.SEQ '\0' []] [Z.CHAR '\0'])]
 
         it "derivative of a character with a different character is empty" $ do
             Z.der 'b' (Z.focus (Z.CHAR 'a')) `shouldBe` []

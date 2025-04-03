@@ -50,7 +50,7 @@ library
       QuickCheck >=2.14.3
     , base >=4.7 && <5
     , containers
-    , criterion
+    , criterion >=1.6.4.0
     , deepseq >=1.4.8.1
     , hspec >=2.11.10
     , hspec-discover
@@ -70,7 +70,7 @@ executable zippers-on-derivatives-exe
       QuickCheck >=2.14.3
     , base >=4.7 && <5
     , containers
-    , criterion
+    , criterion >=1.6.4.0
     , deepseq >=1.4.8.1
     , hspec >=2.11.10
     , hspec-discover
@@ -103,7 +103,7 @@ test-suite zippers-on-derivatives-test
       QuickCheck >=2.14.3
     , base >=4.7 && <5
     , containers
-    , criterion
+    , criterion >=1.6.4.0
     , deepseq >=1.4.8.1
     , hspec >=2.11.10
     , hspec-discover
