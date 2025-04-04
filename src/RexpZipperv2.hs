@@ -123,22 +123,22 @@ createRexp e' = do
 defaults :: IO (Rexp, Mem)
 defaults = do
   mRef <- newIORef undefined
-  e' <- newIORef (ALT [])
-  ps <- newIORef [TopC]
+  r' <- newIORef (ALT [])
+  ps <- newIORef []
   end' <- newIORef (-1)
-  let e = Rexp {
+  let r = Rexp {
         mem = mRef
-        , rexp' = e'
+        , rexp' = r'
       }
-  eRef <- newIORef e
+  rRef <- newIORef r
   let m = Mem {
           start = -1
           , end = end'
           , parents = ps
-          , result = eRef
+          , result = rRef
         }
   writeIORef mRef m
-  return (e, m)
+  return (r, m)
 
 {-| Retrieve the default Rexp.
 
